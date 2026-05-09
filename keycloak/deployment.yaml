@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: infra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.6.1
+          args:
+            - start
+            - --http-enabled=true
+            - --http-port=8080
+            - --hostname-strict=false
+            - --proxy-headers=xforwarded
+          env:
+            - name: KC_DB
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KC_DB
+            - name: KC_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KC_DB_URL
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KC_DB_USERNAME
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_DB_PASSWORD
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_ADMIN_PASSWORD
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8443
+              name: https
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: 1

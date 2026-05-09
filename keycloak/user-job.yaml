@@ -1,0 +1,110 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-user-bootstrap
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+        - name: keycloak-user-bootstrap
+          image: quay.io/keycloak/keycloak:26.6.1
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              KCADM=/opt/keycloak/bin/kcadm.sh
+              SERVER=http://keycloak.infra.svc.cluster.local
+              REALM=master
+
+              "$KCADM" config credentials \
+                --server "$SERVER" \
+                --realm "$REALM" \
+                --user "$KEYCLOAK_ADMIN" \
+                --password "$KEYCLOAK_ADMIN_PASSWORD"
+
+              USER_ID=$("$KCADM" get users -r "$REALM" -q username="$KEYCLOAK_USER_USERNAME" --fields id --format csv --noquotes | head -n 1)
+              if [ -z "$USER_ID" ]; then
+                USER_ID=$("$KCADM" get users -r "$REALM" -q email="$KEYCLOAK_USER_EMAIL" --fields id --format csv --noquotes | head -n 1)
+              fi
+
+              if [ -z "$USER_ID" ]; then
+                "$KCADM" create users -r "$REALM" \
+                  -s username="$KEYCLOAK_USER_USERNAME" \
+                  -s enabled=true \
+                  -s email="$KEYCLOAK_USER_EMAIL" \
+                  -s emailVerified=true
+                USER_ID=$("$KCADM" get users -r "$REALM" -q username="$KEYCLOAK_USER_USERNAME" --fields id --format csv --noquotes | head -n 1)
+              else
+                "$KCADM" update "users/$USER_ID" -r "$REALM" \
+                  -s username="$KEYCLOAK_USER_USERNAME" \
+                  -s email="$KEYCLOAK_USER_EMAIL" \
+                  -s emailVerified=true \
+                  -s enabled=true
+              fi
+
+              "$KCADM" set-password -r "$REALM" --userid "$USER_ID" --new-password "$KEYCLOAK_USER_PASSWORD"
+
+              CLIENT_ID=$("$KCADM" get clients -r "$REALM" -q clientId="$OIDC_CLIENT_ID" --fields id --format csv --noquotes | head -n 1)
+              if [ -z "$CLIENT_ID" ]; then
+                "$KCADM" create clients -r "$REALM" \
+                  -s clientId="$OIDC_CLIENT_ID" \
+                  -s enabled=true \
+                  -s protocol=openid-connect \
+                  -s publicClient=false \
+                  -s secret="$OIDC_CLIENT_SECRET" \
+                  -s standardFlowEnabled=true \
+                  -s directAccessGrantsEnabled=true \
+                  -s 'redirectUris=["https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback","http://localhost:8250/oidc/callback"]' \
+                  -s 'webOrigins=["https://vault.lowjungxuan.dpdns.org"]'
+              else
+                "$KCADM" update "clients/$CLIENT_ID" -r "$REALM" \
+                  -s enabled=true \
+                  -s publicClient=false \
+                  -s secret="$OIDC_CLIENT_SECRET" \
+                  -s standardFlowEnabled=true \
+                  -s directAccessGrantsEnabled=true \
+                  -s 'redirectUris=["https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback","http://localhost:8250/oidc/callback"]' \
+                  -s 'webOrigins=["https://vault.lowjungxuan.dpdns.org"]'
+              fi
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: KEYCLOAK_USER_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_USER_USERNAME
+            - name: KEYCLOAK_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_USER_PASSWORD
+            - name: KEYCLOAK_USER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: KEYCLOAK_USER_EMAIL
+            - name: OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: OIDC_CLIENT_ID
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: OIDC_CLIENT_SECRET

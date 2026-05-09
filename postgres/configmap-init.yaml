@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+        CREATE DATABASE keycloak;
+        CREATE USER keycloak WITH PASSWORD '${KEYCLOAK_DB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON DATABASE keycloak TO keycloak;
+
+        CREATE DATABASE vault;
+        CREATE USER vault WITH PASSWORD '${VAULT_DB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON DATABASE vault TO vault;
+    EOSQL
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "keycloak" <<-EOSQL
+        GRANT ALL ON SCHEMA public TO keycloak;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO keycloak;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO keycloak;
+    EOSQL
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "vault" <<-EOSQL
+        GRANT ALL ON SCHEMA public TO vault;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO vault;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO vault;
+
+        CREATE TABLE IF NOT EXISTS vault_kv_store (
+          parent_path TEXT COLLATE "C" NOT NULL,
+          path        TEXT COLLATE "C",
+          key         TEXT COLLATE "C",
+          value       BYTEA,
+          CONSTRAINT pkey PRIMARY KEY (path, key)
+        );
+
+        CREATE INDEX IF NOT EXISTS parent_path_idx ON vault_kv_store (parent_path);
+
+        CREATE TABLE IF NOT EXISTS vault_ha_locks (
+          ha_key         TEXT COLLATE "C" NOT NULL,
+          ha_identity    TEXT COLLATE "C" NOT NULL,
+          ha_value       TEXT COLLATE "C",
+          valid_until    TIMESTAMP WITH TIME ZONE NOT NULL,
+          CONSTRAINT ha_key PRIMARY KEY (ha_key)
+        );
+
+        GRANT ALL PRIVILEGES ON TABLE vault_kv_store TO vault;
+        GRANT ALL PRIVILEGES ON TABLE vault_ha_locks TO vault;
+    EOSQL

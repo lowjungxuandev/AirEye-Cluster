@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: infra
+
+resources:
+  - bootstrap-rbac.yaml
+  - bootstrap-job.yaml
+  - auto-unseal-cronjob.yaml
+  - seed-secrets-job.yaml
+  - keycloak-oidc-job.yaml

@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-keycloak-oidc
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: vault-bootstrap
+      restartPolicy: OnFailure
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      containers:
+        - name: vault-keycloak-oidc
+          image: alpine/k8s:1.33.4
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              until kubectl exec vault-0 -- vault status 2>/tmp/status | grep -q "Sealed.*false"; do
+                sleep 5
+              done
+
+              ROOT_TOKEN=$(kubectl get secret vault-bootstrap-secret -o jsonpath='{.data.VAULT_ROOT_TOKEN}' | base64 -d)
+              OIDC_CLIENT_ID=$(kubectl get secret server-secret -o jsonpath='{.data.OIDC_CLIENT_ID}' | base64 -d)
+              OIDC_CLIENT_SECRET=$(kubectl get secret server-secret -o jsonpath='{.data.OIDC_CLIENT_SECRET}' | base64 -d)
+
+              cat >/tmp/grim-k8s-read.hcl <<'EOF'
+              path "secret/metadata" {
+                capabilities = ["list"]
+              }
+
+              path "secret/metadata/grim-k8s" {
+                capabilities = ["list", "read"]
+              }
+
+              path "secret/metadata/grim-k8s/*" {
+                capabilities = ["list", "read"]
+              }
+
+              path "secret/data/grim-k8s" {
+                capabilities = ["read"]
+              }
+
+              path "secret/data/grim-k8s/*" {
+                capabilities = ["read"]
+              }
+              EOF
+
+              kubectl cp /tmp/grim-k8s-read.hcl vault-0:/tmp/grim-k8s-read.hcl
+              kubectl exec vault-0 -- sh -ec "VAULT_TOKEN='$ROOT_TOKEN' vault policy write grim-k8s-read /tmp/grim-k8s-read.hcl"
+              kubectl exec vault-0 -- sh -ec "VAULT_TOKEN='$ROOT_TOKEN' vault auth enable oidc || true"
+              kubectl exec vault-0 -- sh -ec "VAULT_TOKEN='$ROOT_TOKEN' vault write auth/oidc/config oidc_discovery_url='https://keycloak.lowjungxuan.dpdns.org/realms/master' oidc_client_id='$OIDC_CLIENT_ID' oidc_client_secret='$OIDC_CLIENT_SECRET' default_role='keycloak'"
+              kubectl exec vault-0 -- sh -ec "VAULT_TOKEN='$ROOT_TOKEN' vault write auth/oidc/role/keycloak user_claim='preferred_username' oidc_scopes='openid,email,profile' allowed_redirect_uris='https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback,http://localhost:8250/oidc/callback' policies='default,grim-k8s-read' ttl='1h'"
