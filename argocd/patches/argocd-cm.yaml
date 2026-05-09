@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  url: https://argocd.lowjungxuan.dpdns.org
+  oidc.config: |
+    name: Keycloak
+    issuer: https://keycloak.lowjungxuan.dpdns.org/realms/master
+    clientID: argocd
+    clientSecret: $oidc.keycloak.clientSecret
+    requestedScopes: ["openid", "profile", "email"]

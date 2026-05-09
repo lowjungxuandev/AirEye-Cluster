@@ -5,6 +5,7 @@ namespace: infra
 resources:
   - namespace.yaml
   - postgres
+  - redis
   - keycloak
   - cert-manager/cluster-issuer.yaml
   - external-secrets

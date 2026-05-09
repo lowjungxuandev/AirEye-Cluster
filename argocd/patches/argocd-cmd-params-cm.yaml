@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  server.insecure: "true"
+  redis.server: redis.infra.svc.cluster.local:6379
+  redis.compression: gzip
