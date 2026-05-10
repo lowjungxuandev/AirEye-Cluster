@@ -4,6 +4,7 @@ metadata:
   name: argocd-cm
 data:
   url: https://argocd.lowjungxuan.dpdns.org
+  kustomize.buildOptions: --enable-helm
   oidc.config: |
     name: Keycloak
     issuer: https://keycloak.lowjungxuan.dpdns.org/realms/master
@@ -19,7 +20,6 @@ data:
   server.insecure: "true"
   redis.server: redis.infra.svc.cluster.local:6379
   redis.compression: gzip
-  kustomize.buildOptions: --enable-helm
 ---
 apiVersion: v1
 kind: ConfigMap
