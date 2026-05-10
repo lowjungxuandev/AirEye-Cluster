@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grim-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.lowjungxuan.dpdns.org
+      secretName: grim-app-tls
+  rules:
+    - host: api.lowjungxuan.dpdns.org
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: grim-app
+                port:
+                  number: 80
