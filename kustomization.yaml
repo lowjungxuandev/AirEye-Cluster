@@ -7,5 +7,6 @@ resources:
   - postgres
   - redis
   - keycloak
+  - minio
   - cert-manager/cluster-issuer.yaml
   - external-secrets

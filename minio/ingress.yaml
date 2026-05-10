@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio
+  namespace: infra
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - minio.lowjungxuan.dpdns.org
+      secretName: minio-tls
+  rules:
+    - host: minio.lowjungxuan.dpdns.org
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9001
