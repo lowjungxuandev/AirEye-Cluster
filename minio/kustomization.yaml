@@ -9,3 +9,4 @@ resources:
   - service.yaml
   - console-service.yaml
   - ingress.yaml
+  - api-ingress.yaml
