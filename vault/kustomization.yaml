@@ -14,6 +14,6 @@ helmCharts:
 
 resources:
   - bootstrap.yaml
-  - auto-unseal.yaml
+  - auto-unseal-cronjob.yaml
   - seed-secrets-job.yaml
   - keycloak-oidc-job.yaml

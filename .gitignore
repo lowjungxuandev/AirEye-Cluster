@@ -1,4 +1,3 @@
 # Helm chart cache from kustomize --enable-helm local builds
 vault/charts/
 reloader/charts/
-argocd/charts/

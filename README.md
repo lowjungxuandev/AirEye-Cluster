@@ -1,6 +1,13 @@
 # grim-k8s
 
-Single-cluster GitOps boilerplate for the `infra` namespace.
+Single-cluster GitOps boilerplate for the `infra` namespace. ArgoCD reconciles
+this repo from `main`; secrets land in Kubernetes via External Secrets Operator
+pulling from Vault.
+
+- Architecture overview → [docs/architecture.md](docs/architecture.md)
+- Vault → Secret → Pod restart flow → [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md)
+- Diagnostic commands → [docs/troubleshooting.md](docs/troubleshooting.md)
+- What changed in the last cleanup pass → [docs/refactor-summary.md](docs/refactor-summary.md)
 
 ## Stack
 
@@ -15,10 +22,40 @@ Single-cluster GitOps boilerplate for the `infra` namespace.
 | external-secrets| Sync secrets from Vault → k8s        | Operator (install separately)          |
 | minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
 | argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
-| reloader        | Auto-restart pods when secrets change | Stakater Reloader chart `2.2.11`       |
+| reloader        | Auto-restart pods on Secret change   | Stakater chart `2.2.11`                |
 | grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
 
+## Folder structure
+
+```
+.
+├── README.md
+├── kustomization.yaml         # ArgoCD entrypoint (path: .)
+├── namespace.yaml             # the infra namespace
+│
+├── argocd/                    # ArgoCD itself (bootstrapped manually)
+│   ├── applications/          # self-managed Application -> path: .
+│   ├── patches/               # config + tolerations
+│   ├── external-secrets.yaml  # argocd-redis + argocd-secret OIDC
+│   └── ingress.yaml
+├── cert-manager/              # operator (manual) + ClusterIssuer (GitOps)
+├── external-secrets/          # ClusterSecretStore + ExternalSecrets
+├── ingress-nginx/             # bootstrapped manually
+├── keycloak/                  # Deployment + bootstrap-job (registers OIDC clients)
+├── minio/                     # StatefulSet + console + ingress
+├── postgres/                  # StatefulSet + init-configmap
+├── redis/                     # StatefulSet + smoke-test job
+├── reloader/                  # Stakater Reloader Helm chart
+├── vault/                     # Helm chart + bootstrap/seed/oidc/auto-unseal jobs
+├── grim-app/                  # the application
+│
+├── docs/                      # architecture, secret flow, troubleshooting
+└── scripts/                   # validate.sh, troubleshoot-secrets.sh
+```
+
 ## Bootstrap order
+
+ArgoCD takes over after step 5. Steps 1–4 are one-time manual setup.
 
 ```sh
 # 1. Cluster ingress + TLS issuer + ESO operator must be in place first.
@@ -27,10 +64,8 @@ kubectl apply -k cert-manager
 helm install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace
 
-# 2a. Pre-create secrets so that vault, postgres, and the seed jobs can bootstrap.
-#     Fill in your own values — these are never committed to git.
-#     After vault-seed-secrets finishes and ESO syncs, ESO takes ownership of
-#     both secrets and keeps them in sync from Vault going forward.
+# 2a. Pre-create secrets so postgres + vault can boot.
+#     ESO takes ownership (creationPolicy: Owner) once Vault is seeded.
 kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n infra create secret generic server-secret \
@@ -92,31 +127,46 @@ kubectl -n infra create secret generic grim-app-secret \
   --from-literal=S3_SECRET_ACCESS_KEY=<your-value> \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 2b. Stateful infra + ESO custom resources (postgres, redis, keycloak, minio, grim-app).
+# 2b. Stateful infra + ESO custom resources.
 kubectl apply -k .
 
 # 3. Vault (Helm chart inflated by kustomize) + bootstrap jobs.
 #    vault-bootstrap initialises and unseals vault.
 #    vault-seed-secrets populates secret/grim-k8s and secret/grim-app-secret.
 #    vault-keycloak-oidc wires the OIDC auth method.
+#    vault-auto-unseal CronJob keeps it unsealed every minute.
 #    ESO then syncs both secrets back to Kubernetes within 5 minutes.
 kubectl kustomize --enable-helm vault | kubectl apply -f -
 
 # 4. ArgoCD itself.
 kubectl apply -k argocd
 
-# 5. The self-managed Application that points back at this repo.
+# 5. The self-managed Application that points back at this repo (path: .).
 kubectl apply -k argocd/applications
 ```
 
-After step 5, ArgoCD reconciles everything in this repo automatically.
+After step 5, ArgoCD reconciles every resource listed in the root
+`kustomization.yaml`.
 
-## Conventions
+## Sync waves
 
-- **Namespace**: All resources land in `infra` (set by root `kustomization.yaml`).
-- **Common labels**: `app.kubernetes.io/part-of: grim-k8s`, `app.kubernetes.io/managed-by: argocd`.
-- **Tolerations**: Applied at root level via kustomize patches (no inline tolerations).
-- **Secrets**: Single source of truth is Vault `secret/grim-k8s` → synced to `server-secret` by ESO.
+```
+wave 0   ExternalSecret/grim-app-secret      (Secret must exist before pod)
+wave 0   everything else (default)
+wave 10  Job/keycloak-bootstrap              (Keycloak must be running)
+wave 10  Deployment/grim-app                 (consumes grim-app-secret)
+```
+
+## Validation
+
+Before pushing changes, render every entrypoint locally:
+
+```sh
+bash scripts/validate.sh
+```
+
+The script runs `kubectl kustomize --enable-helm` on each entrypoint and, if
+installed, `yamllint` and `kubeconform`.
 
 ## Hosts
 
@@ -137,27 +187,40 @@ kubectl get ingress,certificate,externalsecret,application -A
 curl -vL https://argocd.lowjungxuan.dpdns.org/
 ```
 
-## Troubleshooting: grim-app secret refresh
-
-When secrets are updated in Vault, Stakater Reloader watches the Kubernetes Secret and
-automatically restarts grim-app pods so they pick up new values.
-
-**Manual force-refresh if reloader hasn't triggered yet:**
+Or:
 
 ```sh
-# Force ESO to resync the ExternalSecret from Vault
-kubectl -n infra annotate externalsecret grim-app-secret force-sync="$(date +%s)" --overwrite
-
-# Manually restart grim-app
-kubectl -n infra rollout restart deployment grim-app
-
-# Check status
-kubectl -n infra get externalsecret grim-app-secret
-kubectl -n infra get secret grim-app-secret
-kubectl -n infra rollout status deployment grim-app
+bash scripts/troubleshoot-secrets.sh
 ```
 
-- **MinIO open-source was archived on 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
+## Manual secret refresh
+
+When you edit a value in the Vault UI, ESO refreshes within 5 minutes and
+Reloader restarts pods that consume the changed Secret. To force the chain
+immediately:
+
+```sh
+# 1. Force ESO to resync from Vault now
+kubectl -n infra annotate externalsecret grim-app-secret \
+  force-sync="$(date +%s)" --overwrite
+
+# 2. Restart grim-app (Reloader normally does this for you)
+kubectl -n infra rollout restart deployment grim-app
+kubectl -n infra rollout status  deployment grim-app
+```
+
+Full flow with diagrams: [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md).
+
+## Conventions
+
+- **Namespace**: All workload resources land in `infra` (set by root `kustomization.yaml`); ArgoCD itself lives in `argocd`.
+- **Common labels**: `app.kubernetes.io/part-of: grim-k8s`, `app.kubernetes.io/managed-by: argocd` — applied at root level via kustomize `labels` (with `includeSelectors: false`).
+- **Tolerations**: Applied at root level via kustomize patches (no inline tolerations).
+- **Secrets**: Single source of truth is Vault (`secret/grim-k8s`, `secret/grim-app-secret`). Real values never enter git.
+
+## Upstream notes
+
+- **MinIO open-source archived 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
 - **ingress-nginx** plans to archive after Kubecon 2026; consider Gateway API / `ingate` migration in the future.
 - **ArgoCD v3.4** introduced an MS Teams Workflows breaking change — not applicable here (no Teams notifications configured).
 - **cert-manager v1.19** bumped Go to fix DNS SAN validation CVEs; no API changes for our `ClusterIssuer`.
