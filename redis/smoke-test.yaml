@@ -9,9 +9,6 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
-      tolerations:
-        - effect: NoSchedule
-          key: node-role.kubernetes.io/control-plane
       containers:
         - name: redis-smoke-test
           image: redis:8-alpine

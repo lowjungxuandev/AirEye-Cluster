@@ -1,8 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: infra
-  namespace: infra
+  name: keycloak
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
@@ -11,7 +10,7 @@ spec:
   tls:
     - hosts:
         - keycloak.lowjungxuan.dpdns.org
-      secretName: infra-tls
+      secretName: keycloak-tls
   rules:
     - host: keycloak.lowjungxuan.dpdns.org
       http:

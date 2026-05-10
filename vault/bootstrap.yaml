@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-bootstrap
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-bootstrap
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: vault-bootstrap
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-bootstrap
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-bootstrap
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: vault-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: alpine/k8s:1.33.4
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              until kubectl exec vault-0 -- vault status >/tmp/status 2>&1; do
+                if grep -q "Initialized" /tmp/status; then
+                  break
+                fi
+                sleep 5
+              done
+
+              if grep -q "Initialized.*false" /tmp/status; then
+                kubectl exec vault-0 -- vault operator init -key-shares=1 -key-threshold=1 > /tmp/init
+                UNSEAL_KEY=$(awk -F': ' '/Unseal Key 1/ {print $2}' /tmp/init)
+                ROOT_TOKEN=$(awk -F': ' '/Initial Root Token/ {print $2}' /tmp/init)
+                kubectl create secret generic vault-bootstrap-secret \
+                  --from-literal=VAULT_UNSEAL_KEY="$UNSEAL_KEY" \
+                  --from-literal=VAULT_ROOT_TOKEN="$ROOT_TOKEN" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              fi
+
+              kubectl exec vault-0 -- vault status >/tmp/status 2>&1 || true
+              if grep -q "Sealed.*true" /tmp/status; then
+                UNSEAL_KEY=$(kubectl get secret vault-bootstrap-secret -o jsonpath='{.data.VAULT_UNSEAL_KEY}' | base64 -d)
+                kubectl exec vault-0 -- vault operator unseal "$UNSEAL_KEY"
+              fi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-auto-unseal
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: vault-bootstrap
+          restartPolicy: OnFailure
+          containers:
+            - name: auto-unseal
+              image: alpine/k8s:1.33.4
+              command:
+                - /bin/sh
+                - -ec
+              args:
+                - |
+                  if ! kubectl exec vault-0 -- vault status >/tmp/status 2>&1; then
+                    cat /tmp/status
+                    exit 0
+                  fi
+
+                  if grep -q "Initialized.*true" /tmp/status && grep -q "Sealed.*true" /tmp/status; then
+                    UNSEAL_KEY=$(kubectl get secret vault-bootstrap-secret -o jsonpath='{.data.VAULT_UNSEAL_KEY}' | base64 -d)
+                    kubectl exec vault-0 -- vault operator unseal "$UNSEAL_KEY"
+                  fi

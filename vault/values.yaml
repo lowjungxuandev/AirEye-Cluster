@@ -16,13 +16,11 @@ server:
     enabled: true
     config: |-
       ui = true
-
       listener "tcp" {
-        tls_disable = 1
-        address = "[::]:8200"
+        tls_disable     = 1
+        address         = "[::]:8200"
         cluster_address = "[::]:8201"
       }
-
       storage "postgresql" {
         ha_enabled = "true"
       }
@@ -38,12 +36,10 @@ server:
       nginx.ingress.kubernetes.io/proxy-body-size: "0"
     hosts:
       - host: vault.lowjungxuan.dpdns.org
-        paths:
-          - /
+        paths: ["/"]
     tls:
       - secretName: vault-tls
-        hosts:
-          - vault.lowjungxuan.dpdns.org
+        hosts: [vault.lowjungxuan.dpdns.org]
   tolerations:
     - key: node-role.kubernetes.io/control-plane
       effect: NoSchedule

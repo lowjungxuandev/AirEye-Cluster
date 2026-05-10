@@ -4,20 +4,14 @@ namespace: argocd
 
 resources:
   - namespace.yaml
-  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.3.6/manifests/install.yaml
-  - external-secrets.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.4.1/manifests/install.yaml
+  - secrets.yaml
   - ingress.yaml
 
 patches:
+  - path: patches/config.yaml
   - path: patches/delete-bundled-redis.yaml
-  - path: patches/argocd-cm.yaml
-  - path: patches/argocd-cmd-params-cm.yaml
-  - path: patches/argocd-rbac-cm.yaml
   - path: patches/tolerations.yaml
     target:
-      kind: Deployment
-      labelSelector: app.kubernetes.io/part-of=argocd
-  - path: patches/tolerations-statefulset.yaml
-    target:
-      kind: StatefulSet
+      kind: (Deployment|StatefulSet)
       labelSelector: app.kubernetes.io/part-of=argocd

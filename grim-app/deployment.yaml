@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grim-app
-  annotations:
-    argocd.argoproj.io/sync-wave: "20"
 spec:
   replicas: 1
   selector:
@@ -14,9 +12,6 @@ spec:
       labels:
         app: grim-app
     spec:
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          effect: NoSchedule
       containers:
         - name: backend
           image: ghcr.io/lowjungxuandev/grim/backend:latest

@@ -1,10 +1,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: infra
+
+helmCharts:
+  - name: vault
+    repo: https://helm.releases.hashicorp.com
+    version: 0.32.0
+    releaseName: vault
+    namespace: infra
+    valuesFile: values.yaml
+    includeCRDs: true
 
 resources:
-  - bootstrap-rbac.yaml
-  - bootstrap-job.yaml
-  - auto-unseal-cronjob.yaml
+  - bootstrap.yaml
   - seed-secrets-job.yaml
   - keycloak-oidc-job.yaml

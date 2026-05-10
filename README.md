@@ -1,44 +1,75 @@
-# GRIM-K8S
+# grim-k8s
 
-Kustomize layout for the infra namespace services:
+Single-cluster GitOps boilerplate for the `infra` namespace.
 
-- `ingress-nginx/`: installs ingress-nginx and patches it to listen on node ports `80` and `443`
-- `postgres/`: PostgreSQL stateful workload
-- `redis/`: Redis stateful workload used by Argo CD
-- `keycloak/`: Keycloak deployment, service, and public ingress
-- `vault/`: Vault Helm values for Vault server, Vault Agent Injector, and public ingress
-- `minio/`: MinIO object storage with a standalone console for Keycloak OIDC auth, secrets stored in Vault
-- `cert-manager/`: Let's Encrypt `ClusterIssuer`
-- `external-secrets/`: External Secrets resources that sync Kubernetes secrets from Vault KV
-- `argocd/`: Argo CD install, Keycloak OIDC config, ingress, and the `grim-k8s` app
+## Stack
 
-Apply order:
+| Component       | Purpose                              | Source                                 |
+|-----------------|--------------------------------------|----------------------------------------|
+| ingress-nginx   | Cluster ingress (hostNetwork)        | Upstream baremetal manifest            |
+| cert-manager    | Let's Encrypt TLS                    | Upstream + `ClusterIssuer`             |
+| postgres        | DB for keycloak + vault              | `postgres:18-alpine`                   |
+| redis           | Cache backend for ArgoCD             | `redis:8-alpine`                       |
+| keycloak        | Identity provider (OIDC)             | `quay.io/keycloak/keycloak:26.6.1`     |
+| vault           | Secrets backend (PostgreSQL storage) | Helm chart `hashicorp/vault@0.32.0`    |
+| external-secrets| Sync secrets from Vault → k8s        | Operator (install separately)          |
+| minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
+| argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
+| grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
+
+## Bootstrap order
 
 ```sh
+# 1. Cluster ingress + TLS issuer + ESO operator must be in place first.
 kubectl apply -k ingress-nginx
+kubectl apply -k cert-manager
+helm install external-secrets external-secrets/external-secrets \
+  --namespace external-secrets --create-namespace
+
+# 2. Stateful infra + ESO custom resources (postgres, redis, keycloak, minio, grim-app).
 kubectl apply -k .
-helm upgrade --install vault hashicorp/vault --version 0.32.0 --namespace infra -f vault/values.yaml
-kubectl apply -k vault
+
+# 3. Vault (Helm chart inflated by kustomize) + bootstrap jobs.
+kubectl kustomize --enable-helm vault | kubectl apply -f -
+
+# 4. ArgoCD itself.
 kubectl apply -k argocd
+
+# 5. The self-managed Application that points back at this repo.
 kubectl apply -k argocd/applications
 ```
 
-Why ingress-nginx is separate:
+After step 5, ArgoCD reconciles everything in this repo automatically.
 
-The root `kustomization.yaml` sets `namespace: infra` for app resources. The ingress
-controller must stay in the `ingress-nginx` namespace, so it has its own kustomize
-overlay.
+## Conventions
 
-Useful checks:
+- **Namespace**: All resources land in `infra` (set by root `kustomization.yaml`).
+- **Common labels**: `app.kubernetes.io/part-of: grim-k8s`, `app.kubernetes.io/managed-by: argocd`.
+- **Tolerations**: Applied at root level via kustomize patches (no inline tolerations).
+- **Secrets**: Single source of truth is Vault `secret/grim-k8s` → synced to `server-secret` by ESO.
+
+## Hosts
+
+| Host                                      | Service           |
+|-------------------------------------------|-------------------|
+| `argocd.lowjungxuan.dpdns.org`            | ArgoCD UI         |
+| `keycloak.lowjungxuan.dpdns.org`          | Keycloak          |
+| `vault.lowjungxuan.dpdns.org`             | Vault UI          |
+| `minio.lowjungxuan.dpdns.org`             | MinIO console     |
+| `s3.lowjungxuan.dpdns.org`                | MinIO S3 API      |
+| `api.lowjungxuan.dpdns.org`               | grim-app backend  |
+
+## Health checks
 
 ```sh
-kubectl get pods -n ingress-nginx
-kubectl get pods,ingress,certificate -n infra
-kubectl get pods,ingress,externalsecret,application -n argocd
-kubectl logs -n infra job/redis-smoke-test
-curl -vL https://keycloak.lowjungxuan.dpdns.org/
-curl -vL https://vault.lowjungxuan.dpdns.org/
+kubectl get pods -A
+kubectl get ingress,certificate,externalsecret,application -A
 curl -vL https://argocd.lowjungxuan.dpdns.org/
-curl -vL https://minio.lowjungxuan.dpdns.org/
-curl -vL https://minio.lowjungxuan.dpdns.org/sso
 ```
+
+## Notes on versions
+
+- **MinIO open-source was archived on 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
+- **ingress-nginx** plans to archive after Kubecon 2026; consider Gateway API / `ingate` migration in the future.
+- **ArgoCD v3.4** introduced an MS Teams Workflows breaking change — not applicable here (no Teams notifications configured).
+- **cert-manager v1.19** bumped Go to fix DNS SAN validation CVEs; no API changes for our `ClusterIssuer`.

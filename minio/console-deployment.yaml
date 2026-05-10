@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: minio-console
-  annotations:
-    argocd.argoproj.io/sync-wave: "25"
 spec:
   replicas: 1
   selector:
@@ -14,9 +12,6 @@ spec:
       labels:
         app: minio-console
     spec:
-      tolerations:
-        - effect: NoSchedule
-          key: node-role.kubernetes.io/control-plane
       containers:
         - name: console
           image: ghcr.io/georgmangold/console:v1.9.1

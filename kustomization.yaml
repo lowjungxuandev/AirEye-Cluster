@@ -4,10 +4,35 @@ namespace: infra
 
 resources:
   - namespace.yaml
+  - external-secrets
   - postgres
   - redis
   - keycloak
   - minio
   - grim-app
   - cert-manager/cluster-issuer.yaml
-  - external-secrets
+
+labels:
+  - includeSelectors: false
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/part-of: grim-k8s
+      app.kubernetes.io/managed-by: argocd
+
+patches:
+  - target:
+      kind: (Deployment|StatefulSet|Job|DaemonSet)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            effect: NoSchedule
+  - target:
+      kind: CronJob
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/tolerations
+        value:
+          - key: node-role.kubernetes.io/control-plane
+            effect: NoSchedule

@@ -13,38 +13,12 @@ spec:
       labels:
         app: postgres
     spec:
-      tolerations:
-        - effect: NoSchedule
-          key: node-role.kubernetes.io/control-plane
       containers:
         - name: postgres
           image: postgres:18-alpine
-          env:
-            - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: server-secret
-                  key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: server-secret
-                  key: POSTGRES_PASSWORD
-            - name: POSTGRES_DB
-              valueFrom:
-                secretKeyRef:
-                  name: server-secret
-                  key: POSTGRES_DB
-            - name: KEYCLOAK_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: server-secret
-                  key: KEYCLOAK_DB_PASSWORD
-            - name: VAULT_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: server-secret
-                  key: VAULT_DB_PASSWORD
+          envFrom:
+            - secretRef:
+                name: server-secret
           ports:
             - containerPort: 5432
               name: postgres

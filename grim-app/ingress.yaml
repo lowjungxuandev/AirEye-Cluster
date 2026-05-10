@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: grim-app
   annotations:
-    argocd.argoproj.io/sync-wave: "30"
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 spec:
