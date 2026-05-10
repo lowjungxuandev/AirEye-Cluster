@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-console
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio-console
+  template:
+    metadata:
+      labels:
+        app: minio-console
+    spec:
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+      containers:
+        - name: console
+          image: ghcr.io/georgmangold/console:v1.9.1
+          env:
+            - name: CONSOLE_MINIO_SERVER
+              value: http://minio.infra.svc.cluster.local:9000
+            - name: CONSOLE_IDP_URL
+              value: https://keycloak.lowjungxuan.dpdns.org/realms/master/.well-known/openid-configuration
+            - name: CONSOLE_IDP_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: MINIO_OIDC_CLIENT_ID
+            - name: CONSOLE_IDP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: MINIO_OIDC_CLIENT_SECRET
+            - name: CONSOLE_IDP_CALLBACK
+              value: https://minio.lowjungxuan.dpdns.org
+            - name: CONSOLE_IDP_DISPLAY_NAME
+              value: Keycloak
+            - name: CONSOLE_IDP_SCOPES
+              value: openid,email,profile
+          ports:
+            - containerPort: 9090
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 512Mi
+              cpu: 500m

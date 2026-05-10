@@ -7,7 +7,7 @@ Kustomize layout for the infra namespace services:
 - `redis/`: Redis stateful workload used by Argo CD
 - `keycloak/`: Keycloak deployment, service, and public ingress
 - `vault/`: Vault Helm values for Vault server, Vault Agent Injector, and public ingress
-- `minio/`: MinIO object storage with Keycloak OIDC auth, secrets stored in Vault
+- `minio/`: MinIO object storage with a standalone console for Keycloak OIDC auth, secrets stored in Vault
 - `cert-manager/`: Let's Encrypt `ClusterIssuer`
 - `external-secrets/`: External Secrets resources that sync Kubernetes secrets from Vault KV
 - `argocd/`: Argo CD install, Keycloak OIDC config, ingress, and the `grim-k8s` app
@@ -40,4 +40,5 @@ curl -vL https://keycloak.lowjungxuan.dpdns.org/
 curl -vL https://vault.lowjungxuan.dpdns.org/
 curl -vL https://argocd.lowjungxuan.dpdns.org/
 curl -vL https://minio.lowjungxuan.dpdns.org/
+curl -vL https://minio.lowjungxuan.dpdns.org/sso
 ```

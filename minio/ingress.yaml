@@ -21,6 +21,6 @@ spec:
             path: /
             backend:
               service:
-                name: minio
+                name: minio-console
                 port:
-                  number: 9001
+                  number: 9090

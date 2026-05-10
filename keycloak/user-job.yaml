@@ -121,6 +121,31 @@ spec:
                   -s 'redirectUris=["https://minio.lowjungxuan.dpdns.org/oauth_callback"]' \
                   -s 'webOrigins=["https://minio.lowjungxuan.dpdns.org"]'
               fi
+
+              MINIO_POLICY_MAPPER_ID=$("$KCADM" get "clients/$MINIO_CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes | awk -F, '$2 == "minio-policy" { print $1; exit }')
+              if [ -z "$MINIO_POLICY_MAPPER_ID" ]; then
+                "$KCADM" create "clients/$MINIO_CLIENT_UUID/protocol-mappers/models" -r "$REALM" \
+                  -s name=minio-policy \
+                  -s protocol=openid-connect \
+                  -s protocolMapper=oidc-hardcoded-claim-mapper \
+                  -s 'config."claim.name"=policy' \
+                  -s 'config."claim.value"=consoleAdmin' \
+                  -s 'config."jsonType.label"=String' \
+                  -s 'config."access.token.claim"=true' \
+                  -s 'config."id.token.claim"=true' \
+                  -s 'config."userinfo.token.claim"=true'
+              else
+                "$KCADM" update "clients/$MINIO_CLIENT_UUID/protocol-mappers/models/$MINIO_POLICY_MAPPER_ID" -r "$REALM" \
+                  -s name=minio-policy \
+                  -s protocol=openid-connect \
+                  -s protocolMapper=oidc-hardcoded-claim-mapper \
+                  -s 'config."claim.name"=policy' \
+                  -s 'config."claim.value"=consoleAdmin' \
+                  -s 'config."jsonType.label"=String' \
+                  -s 'config."access.token.claim"=true' \
+                  -s 'config."id.token.claim"=true' \
+                  -s 'config."userinfo.token.claim"=true'
+              fi
           env:
             - name: KEYCLOAK_ADMIN
               valueFrom:

@@ -5,5 +5,7 @@ namespace: infra
 resources:
   - pvc.yaml
   - statefulset.yaml
+  - console-deployment.yaml
   - service.yaml
+  - console-service.yaml
   - ingress.yaml

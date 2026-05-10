@@ -54,9 +54,7 @@ spec:
             - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
               value: Keycloak
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
-              value: preferred_username
-            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
-              value: https://minio.lowjungxuan.dpdns.org/oauth_callback
+              value: policy
             - name: MINIO_IDENTITY_OPENID_SCOPES
               value: openid,email,profile
           ports:
