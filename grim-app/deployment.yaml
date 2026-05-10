@@ -4,6 +4,7 @@ metadata:
   name: grim-app
   annotations:
     argocd.argoproj.io/sync-wave: "10"
+    secret.reloader.stakater.com/reload: "grim-app-secret"
 spec:
   revisionHistoryLimit: 1
   replicas: 1

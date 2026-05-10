@@ -15,6 +15,7 @@ Single-cluster GitOps boilerplate for the `infra` namespace.
 | external-secrets| Sync secrets from Vault → k8s        | Operator (install separately)          |
 | minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
 | argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
+| reloader        | Auto-restart pods when secrets change | Stakater Reloader chart `2.2.11`       |
 | grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
 
 ## Bootstrap order
@@ -67,7 +68,25 @@ kubectl get ingress,certificate,externalsecret,application -A
 curl -vL https://argocd.lowjungxuan.dpdns.org/
 ```
 
-## Notes on versions
+## Troubleshooting: grim-app secret refresh
+
+When secrets are updated in Vault, Stakater Reloader watches the Kubernetes Secret and
+automatically restarts grim-app pods so they pick up new values.
+
+**Manual force-refresh if reloader hasn't triggered yet:**
+
+```sh
+# Force ESO to resync the ExternalSecret from Vault
+kubectl -n infra annotate externalsecret grim-app-secret force-sync="$(date +%s)" --overwrite
+
+# Manually restart grim-app
+kubectl -n infra rollout restart deployment grim-app
+
+# Check status
+kubectl -n infra get externalsecret grim-app-secret
+kubectl -n infra get secret grim-app-secret
+kubectl -n infra rollout status deployment grim-app
+```
 
 - **MinIO open-source was archived on 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
 - **ingress-nginx** plans to archive after Kubecon 2026; consider Gateway API / `ingate` migration in the future.
