@@ -25,6 +25,8 @@ spec:
             - secretRef:
                 name: server-secret
           env:
+            - name: JAVA_OPTS_KC_HEAP
+              value: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=60"
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -37,8 +39,8 @@ spec:
               name: https
           resources:
             requests:
-              memory: 512Mi
-              cpu: 500m
+              memory: 384Mi
+              cpu: 250m
             limits:
-              memory: 2Gi
+              memory: 1536Mi
               cpu: "1"

@@ -9,8 +9,10 @@ helmCharts:
     namespace: infra
     valuesFile: values.yaml
     includeCRDs: true
+    skipTests: true
 
 resources:
   - bootstrap.yaml
+  - auto-unseal.yaml
   - seed-secrets-job.yaml
   - keycloak-oidc-job.yaml
