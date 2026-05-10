@@ -122,7 +122,7 @@ spec:
                   -s 'webOrigins=["https://minio.lowjungxuan.dpdns.org"]'
               fi
 
-              MINIO_POLICY_MAPPER_ID=$("$KCADM" get "clients/$MINIO_CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes | awk -F, '$2 == "minio-policy" { print $1; exit }')
+              MINIO_POLICY_MAPPER_ID=$("$KCADM" get "clients/$MINIO_CLIENT_UUID/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes | sed -n 's/,minio-policy$//p' | head -n 1)
               if [ -z "$MINIO_POLICY_MAPPER_ID" ]; then
                 "$KCADM" create "clients/$MINIO_CLIENT_UUID/protocol-mappers/models" -r "$REALM" \
                   -s name=minio-policy \
