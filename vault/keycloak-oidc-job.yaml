@@ -28,10 +28,10 @@ spec:
               path "secret/metadata"          { capabilities = ["list"] }
               path "secret/metadata/grim-k8s"   { capabilities = ["list", "read"] }
               path "secret/metadata/grim-k8s/*" { capabilities = ["list", "read"] }
-              path "secret/metadata/grim-app"   { capabilities = ["list", "read"] }
+              path "secret/metadata/grim-app-secret" { capabilities = ["list", "read"] }
               path "secret/data/grim-k8s"       { capabilities = ["read"] }
               path "secret/data/grim-k8s/*"     { capabilities = ["read"] }
-              path "secret/data/grim-app"       { capabilities = ["create", "read", "update"] }
+              path "secret/data/grim-app-secret" { capabilities = ["create", "read", "update"] }
               EOF
 
               kubectl cp /tmp/grim-k8s-read.hcl vault-0:/tmp/grim-k8s-read.hcl
