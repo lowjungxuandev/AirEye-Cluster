@@ -10,7 +10,6 @@ resources:
 
 patches:
   - path: patches/config.yaml
-  - path: patches/delete-bundled-redis.yaml
   - path: patches/tolerations.yaml
     target:
       kind: (Deployment|StatefulSet)

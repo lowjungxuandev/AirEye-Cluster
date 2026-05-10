@@ -22,12 +22,12 @@ spec:
                 - -ec
               args:
                 - |
-                  if ! kubectl exec vault-0 -- vault status >/tmp/status 2>&1; then
+                  if ! kubectl exec -n infra vault-0 -- vault status >/tmp/status 2>&1; then
                     cat /tmp/status
                     exit 0
                   fi
 
                   if grep -q "Initialized.*true" /tmp/status && grep -q "Sealed.*true" /tmp/status; then
-                    UNSEAL_KEY=$(kubectl get secret vault-bootstrap-secret -o jsonpath='{.data.VAULT_UNSEAL_KEY}' | base64 -d)
-                    kubectl exec vault-0 -- vault operator unseal "$UNSEAL_KEY"
+                    UNSEAL_KEY=$(kubectl get secret -n infra vault-bootstrap-secret -o jsonpath='{.data.VAULT_UNSEAL_KEY}' | base64 -d)
+                    kubectl exec -n infra vault-0 -- vault operator unseal "$UNSEAL_KEY"
                   fi
