@@ -19,13 +19,16 @@ spec:
             - start
             - --http-enabled=true
             - --http-port=8080
-            - --hostname-strict=false
             - --proxy-headers=xforwarded
           envFrom:
             - secretRef:
                 name: server-secret
           env:
             - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME
+              value: https://keycloak.lowjungxuan.dpdns.org
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
               value: "true"
             - name: JAVA_OPTS_KC_HEAP
               value: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=60"

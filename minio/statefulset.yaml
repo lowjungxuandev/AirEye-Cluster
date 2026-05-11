@@ -28,7 +28,7 @@ spec:
             - name: MINIO_BROWSER_REDIRECT_URL
               value: https://minio.lowjungxuan.dpdns.org
             - name: MINIO_IDENTITY_OPENID_CONFIG_URL
-              value: https://keycloak.lowjungxuan.dpdns.org/realms/master/.well-known/openid-configuration
+              value: http://keycloak.infra.svc.cluster.local/realms/master/.well-known/openid-configuration
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
               valueFrom:
                 secretKeyRef:

@@ -19,7 +19,7 @@ spec:
             - name: CONSOLE_MINIO_SERVER
               value: http://minio.infra.svc.cluster.local:9000
             - name: CONSOLE_IDP_URL
-              value: https://keycloak.lowjungxuan.dpdns.org/realms/master/.well-known/openid-configuration
+              value: http://keycloak.infra.svc.cluster.local/realms/master/.well-known/openid-configuration
             - name: CONSOLE_IDP_CLIENT_ID
               valueFrom:
                 secretKeyRef:
