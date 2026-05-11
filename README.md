@@ -1,8 +1,8 @@
 # grim-k8s
 
 Single-cluster GitOps boilerplate for the `infra` namespace. ArgoCD reconciles
-this repo from `main`; secrets land in Kubernetes via External Secrets Operator
-pulling from Vault.
+this repo from `main`; secrets land in Kubernetes via the HashiCorp Vault
+Secrets Operator (VSO) pulling from Vault.
 
 - Architecture overview → [docs/architecture.md](docs/architecture.md)
 - Vault → Secret → Pod restart flow → [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md)
@@ -19,10 +19,9 @@ pulling from Vault.
 | redis           | Cache backend for ArgoCD             | `redis:8-alpine`                       |
 | keycloak        | Identity provider (OIDC)             | `quay.io/keycloak/keycloak:26.6.1`     |
 | vault           | Secrets backend (PostgreSQL storage) | Helm chart `hashicorp/vault@0.32.0`    |
-| external-secrets| Sync secrets from Vault → k8s        | Operator (install separately)          |
+| vault-secrets-operator | Sync secrets from Vault → k8s | Helm chart `hashicorp/vault-secrets-operator@0.10.0` |
 | minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
 | argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
-| reloader        | Auto-restart pods on Secret change   | Stakater chart `2.2.11`                |
 | grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
 
 ## Folder structure
@@ -33,21 +32,20 @@ pulling from Vault.
 ├── kustomization.yaml         # ArgoCD entrypoint (path: .)
 ├── namespace.yaml             # the infra namespace
 │
-├── argocd/                    # ArgoCD itself (bootstrapped manually)
-│   ├── applications/          # self-managed Application -> path: .
-│   ├── patches/               # config + tolerations
-│   ├── external-secrets.yaml  # argocd-redis + argocd-secret OIDC
+├── argocd/                       # ArgoCD itself (bootstrapped manually)
+│   ├── applications/             # self-managed Application + VSO Application
+│   ├── patches/                  # config + tolerations
+│   ├── vault-secrets.yaml        # VaultConnection/VaultAuth + VSS for argocd ns
 │   └── ingress.yaml
-├── cert-manager/              # operator (manual) + ClusterIssuer (GitOps)
-├── external-secrets/          # ClusterSecretStore + ExternalSecrets
-├── ingress-nginx/             # bootstrapped manually
-├── keycloak/                  # Deployment + bootstrap-job (registers OIDC clients)
-├── minio/                     # StatefulSet + console + ingress
-├── postgres/                  # StatefulSet + init-configmap
-├── redis/                     # StatefulSet + smoke-test job
-├── reloader/                  # Stakater Reloader Helm chart
-├── vault/                     # Helm chart + bootstrap/seed/oidc/auto-unseal jobs
-├── grim-app/                  # the application
+├── cert-manager/                 # operator (manual) + ClusterIssuer (GitOps)
+├── vault-secrets-operator/       # VaultConnection/VaultAuth + VSS for infra ns
+├── ingress-nginx/                # bootstrapped manually
+├── keycloak/                     # Deployment + bootstrap-job (registers OIDC clients)
+├── minio/                        # StatefulSet + console + ingress
+├── postgres/                     # StatefulSet + init-configmap
+├── redis/                        # StatefulSet + smoke-test job
+├── vault/                        # Helm chart + bootstrap/seed/oidc/auto-unseal jobs
+├── grim-app/                     # the application
 │
 ├── docs/                      # architecture, secret flow, troubleshooting
 └── scripts/                   # validate.sh, troubleshoot-secrets.sh
@@ -58,14 +56,12 @@ pulling from Vault.
 ArgoCD takes over after step 5. Steps 1–4 are one-time manual setup.
 
 ```sh
-# 1. Cluster ingress + TLS issuer + ESO operator must be in place first.
+# 1. Cluster ingress + TLS issuer must be in place first.
 kubectl apply -k ingress-nginx
 kubectl apply -k cert-manager
-helm install external-secrets external-secrets/external-secrets \
-  --namespace external-secrets --create-namespace
 
 # 2a. Pre-create secrets so postgres + vault can boot.
-#     ESO takes ownership (creationPolicy: Owner) once Vault is seeded.
+#     VSO takes ownership (destination.create: true) once Vault is seeded.
 kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n infra create secret generic server-secret \
@@ -127,21 +123,24 @@ kubectl -n infra create secret generic grim-app-secret \
   --from-literal=S3_SECRET_ACCESS_KEY=<your-value> \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 2b. Stateful infra + ESO custom resources.
+# 2b. Stateful infra + VSO custom resources (VaultConnection, VaultAuth,
+#     VaultStaticSecrets). The VSO operator itself is installed by an
+#     ArgoCD Application created in step 5.
 kubectl apply -k .
 
 # 3. Vault (Helm chart inflated by kustomize) + bootstrap jobs.
 #    vault-bootstrap initialises and unseals vault.
-#    vault-seed-secrets populates secret/grim-k8s and secret/grim-app-secret.
-#    vault-keycloak-oidc wires the OIDC auth method.
 #    vault-auto-unseal CronJob keeps it unsealed every minute.
-#    ESO then syncs both secrets back to Kubernetes within 5 minutes.
 kubectl kustomize --enable-helm vault | kubectl apply -f -
 
-# 4. ArgoCD itself.
+# 4. Configure Vault MANUALLY (kv put, policies, auth methods).
+#    Full command list in docs/architecture.md "Vault config (manual)".
+
+# 5. ArgoCD itself.
 kubectl apply -k argocd
 
-# 5. The self-managed Application that points back at this repo (path: .).
+# 6. Self-managed Application + the standalone VSO Application
+#    (sync-wave: -1 so VSO starts before the rest).
 kubectl apply -k argocd/applications
 ```
 
@@ -151,7 +150,8 @@ After step 5, ArgoCD reconciles every resource listed in the root
 ## Sync waves
 
 ```
-wave 0   ExternalSecret/grim-app-secret      (Secret must exist before pod)
+wave -1  Application/vault-secrets-operator  (VSO must run before VSS reconcile)
+wave 0   VaultStaticSecret/grim-app-secret   (Secret must exist before pod)
 wave 0   everything else (default)
 wave 10  Job/keycloak-bootstrap              (Keycloak must be running)
 wave 10  Deployment/grim-app                 (consumes grim-app-secret)
@@ -183,7 +183,7 @@ installed, `yamllint` and `kubeconform`.
 
 ```sh
 kubectl get pods -A
-kubectl get ingress,certificate,externalsecret,application -A
+kubectl get ingress,certificate,vaultstaticsecret,application -A
 curl -vL https://argocd.lowjungxuan.dpdns.org/
 ```
 
@@ -195,16 +195,17 @@ bash scripts/troubleshoot-secrets.sh
 
 ## Manual secret refresh
 
-When you edit a value in the Vault UI, ESO refreshes within 5 minutes and
-Reloader restarts pods that consume the changed Secret. To force the chain
+When you edit a value in the Vault UI, VSO re-reads it within 30 s and
+triggers a rolling restart of every workload listed in the
+VaultStaticSecret's `rolloutRestartTargets`. To force the chain
 immediately:
 
 ```sh
-# 1. Force ESO to resync from Vault now
-kubectl -n infra annotate externalsecret grim-app-secret \
-  force-sync="$(date +%s)" --overwrite
+# 1. Force VSO to resync from Vault now
+kubectl -n infra annotate vaultstaticsecret grim-app-secret \
+  vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
 
-# 2. Restart grim-app (Reloader normally does this for you)
+# 2. (Only if a workload isn't in rolloutRestartTargets)
 kubectl -n infra rollout restart deployment grim-app
 kubectl -n infra rollout status  deployment grim-app
 ```

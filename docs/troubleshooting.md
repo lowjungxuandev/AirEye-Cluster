@@ -6,10 +6,10 @@ is called out where relevant.
 ## Cheat sheet
 
 ```sh
-kubectl get pods,ingress,certificate,externalsecret,application -A
-kubectl -n infra get externalsecret
-kubectl -n argocd get externalsecret
-kubectl -n infra get secret server-secret grim-app-secret
+kubectl get pods,ingress,certificate,vaultstaticsecret,application -A
+kubectl -n infra  get vaultstaticsecret
+kubectl -n argocd get vaultstaticsecret
+kubectl -n infra  get secret server-secret grim-app-secret
 kubectl -n argocd get application grim-k8s
 ```
 
@@ -20,42 +20,43 @@ bundle in one shot.
 
 ## Vault edit doesn't reach the pod
 
-1. **Is ESO syncing?**
+1. **Is VSO syncing?**
    ```sh
-   kubectl -n infra describe externalsecret grim-app-secret
+   kubectl -n infra describe vaultstaticsecret grim-app-secret
    ```
-   Look at the `Status.Conditions` block. `Ready=True` with reason
-   `SecretSynced` means the K8s Secret was last written successfully.
+   Look at the `Status.Conditions` block. `SecretSynced=True` means the K8s
+   Secret was last written successfully.
 2. **Force sync now:**
    ```sh
-   kubectl -n infra annotate externalsecret grim-app-secret \
-     force-sync="$(date +%s)" --overwrite
+   kubectl -n infra annotate vaultstaticsecret grim-app-secret \
+     vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
    ```
 3. **Did the K8s Secret actually change?**
    ```sh
    kubectl -n infra get secret grim-app-secret -o jsonpath='{.metadata.resourceVersion}'
    ```
    The number should bump after a real change.
-4. **Did Reloader trigger a rollout?**
+4. **Did VSO trigger a rollout?**
    ```sh
    kubectl -n infra rollout history deployment grim-app
-   kubectl -n infra logs -n infra -l app.kubernetes.io/name=reloader --tail=50
+   kubectl -n vault-secrets-operator logs deploy/vault-secrets-operator-controller-manager --tail=50
    ```
 5. **Manual restart:**
    ```sh
    kubectl -n infra rollout restart deployment grim-app
    ```
 
-## ExternalSecret stuck `Ready=False`
+## VaultStaticSecret stuck `SecretSynced=False`
 
 Common causes:
 
-| Symptom (`kubectl describe`)                                   | Fix                                                   |
-|----------------------------------------------------------------|-------------------------------------------------------|
-| `unable to validate store: ... vault-bootstrap-secret not found` | Vault hasn't been bootstrapped yet. Apply `vault/`. |
-| `permission denied` from Vault                                  | Token in `vault-bootstrap-secret` was rotated out — re-run vault bootstrap or restore the secret. |
-| `Status: SecretSyncedError`                                     | Vault path is missing — re-run `vault-seed-secrets` Job. |
-| `vault: connection refused`                                     | Vault is sealed or pod restarting — check `vault status`. |
+| Symptom (`kubectl describe`)                                  | Fix                                                   |
+|---------------------------------------------------------------|-------------------------------------------------------|
+| `VaultClientError: permission denied`                          | The Vault Kubernetes auth role `vso-grim-k8s` is not bound to the VSO ServiceAccount or lacks the `grim-k8s-read` policy. Re-run the manual Vault auth setup (see `docs/architecture.md`). |
+| `VaultClientError: ... no role found`                          | The Vault role `vso-grim-k8s` is missing entirely. Create it (see `docs/architecture.md`). |
+| `Vault path not found`                                         | Vault path is missing — re-run the manual seed (see `docs/architecture.md` § Vault config). |
+| `connection refused`                                           | Vault is sealed or pod restarting — check `vault status`. |
+| `VaultConnection not found` / `VaultAuth not found`            | The CRs in `vault-secrets-operator/` haven't been applied yet. |
 
 ## Vault is sealed
 
@@ -79,7 +80,15 @@ UNSEAL_KEY=$(kubectl get secret -n infra vault-bootstrap-secret \
 kubectl exec -n infra vault-0 -- vault operator unseal "$UNSEAL_KEY"
 ```
 
-## ArgoCD says `OutOfSync`
+## ArgoCD says `OutOfSync` on a Secret
+
+VSO mutates `/data` on each Secret it manages, which would normally show as
+drift. The grim-k8s Application has `ignoreDifferences` on
+`kind: Secret, jsonPointers: [/data]` — if a Secret still appears OutOfSync,
+check that the path lives under that Application (and not another one) and
+that the JSON pointer matches.
+
+## ArgoCD says `OutOfSync` (general)
 
 ```sh
 kubectl -n argocd get application grim-k8s -o yaml | yq '.status.sync, .status.health'
@@ -91,48 +100,34 @@ Common causes:
 - **`must specify --enable-helm`** — `kustomize.buildOptions: --enable-helm`
   must be in `argocd-cm` (not `argocd-cmd-params-cm`). See
   `argocd/patches/config.yaml`.
-- **Webhook to a missing service** — happens when the ESO CRD is uninstalled
-  while ExternalSecrets exist. Reinstall ESO before deleting CRs.
+- **VSO CRDs missing** — happens before the `vault-secrets-operator` Application
+  (sync-wave `-1`) finishes installing the chart. Wait, or re-sync that
+  Application first.
 
 ## ArgoCD login → `WRONGPASS`
 
 Symptom: Keycloak OIDC login redirects back with a Redis password error.
 
-Cause: ArgoCD pods cached the old Redis password before ESO synced the new
-one. Restart server-side components:
+Cause: ArgoCD pods cached the old Redis password before VSO synced the new
+one. The `argocd-redis` VaultStaticSecret lists ArgoCD's server,
+repo-server and application-controller in `rolloutRestartTargets`, so this
+should self-heal. If it doesn't, restart manually:
 
 ```sh
 kubectl -n argocd rollout restart deploy/argocd-server deploy/argocd-repo-server
 kubectl -n argocd rollout restart statefulset/argocd-application-controller
 ```
 
-## Wrong namespace for ExternalSecret
-
-`ClusterSecretStore` is cluster-scoped, but `ExternalSecret` is namespaced.
-The K8s Secret it creates lands in the **same namespace as the
-ExternalSecret**. If `grim-app-secret` doesn't appear in `infra`, check
-`metadata.namespace` on the ExternalSecret.
-
 ## Pod still uses old env after Secret update
 
 Pod env vars are baked at start time. Confirm:
 
-1. The Deployment annotation `secret.reloader.stakater.com/reload: <secret-name>` is present.
-2. Reloader is actually running:
+1. The workload is listed in the VaultStaticSecret's `rolloutRestartTargets`.
+2. The VSO operator pod is running:
    ```sh
-   kubectl -n infra get pods -l app.kubernetes.io/name=reloader
+   kubectl -n vault-secrets-operator get pods
    ```
 3. Force a manual rollout:
    ```sh
    kubectl -n infra rollout restart deployment grim-app
    ```
-
-## Reloader didn't restart the deployment
-
-```sh
-kubectl -n infra logs deploy/reloader-reloader --tail=200 | grep grim-app
-```
-
-If the logs don't mention `grim-app`, either the annotation is wrong or
-Reloader isn't watching `infra`. Check the chart values in
-`reloader/kustomization.yaml`.

@@ -1,5 +1,10 @@
 # Refactor summary
 
+> **Superseded by the 2026-05-11 VSO migration.** The directory names
+> `external-secrets/` and `reloader/` referenced below no longer exist —
+> they were removed when the repo switched from ESO + Stakater Reloader to
+> the HashiCorp Vault Secrets Operator. Kept for historical context only.
+
 This document records the cleanup pass that introduced `docs/` and `scripts/`.
 No runtime behavior changed — confirmed by a byte-identical
 `kubectl kustomize --enable-helm` render before and after.

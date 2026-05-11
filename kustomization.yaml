@@ -4,12 +4,11 @@ namespace: infra
 
 resources:
   - namespace.yaml
-  - external-secrets
+  - vault-secrets-operator
   - postgres
   - redis
   - keycloak
   - minio
-  - reloader
   - grim-app
   - cert-manager/cluster-issuer.yaml
 

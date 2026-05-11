@@ -9,7 +9,7 @@ data:
     name: Keycloak
     issuer: https://keycloak.lowjungxuan.dpdns.org/realms/master
     clientID: argocd
-    clientSecret: $oidc.keycloak.clientSecret
+    clientSecret: $argocd-keycloak-oidc:clientSecret
     requestedScopes: ["openid", "profile", "email"]
 ---
 apiVersion: v1

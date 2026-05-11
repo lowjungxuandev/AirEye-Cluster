@@ -19,3 +19,13 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data
+    - group: ""
+      kind: Secret
+      jqPathExpressions:
+        - .metadata.annotations."app.kubernetes.io/managed-by"
+        - .metadata.labels."app.kubernetes.io/managed-by"
