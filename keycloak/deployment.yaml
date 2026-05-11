@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: keycloak
 spec:
+  revisionHistoryLimit: 2
   replicas: 1
   selector:
     matchLabels:

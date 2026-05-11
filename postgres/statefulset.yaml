@@ -4,6 +4,7 @@ metadata:
   name: postgres
 spec:
   serviceName: postgres
+  revisionHistoryLimit: 2
   replicas: 1
   selector:
     matchLabels:
