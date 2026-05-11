@@ -65,6 +65,7 @@ spec:
                     -s enabled=true \
                     -s protocol=openid-connect \
                     -s publicClient=false \
+                    -s clientAuthenticatorType=client-secret \
                     -s secret="$CLIENT_SECRET" \
                     -s standardFlowEnabled=true \
                     -s directAccessGrantsEnabled=true \
@@ -74,7 +75,9 @@ spec:
                 else
                   "$KCADM" update "clients/$UUID" -r "$REALM" \
                     -s enabled=true \
+                    -s protocol=openid-connect \
                     -s publicClient=false \
+                    -s clientAuthenticatorType=client-secret \
                     -s secret="$CLIENT_SECRET" \
                     -s standardFlowEnabled=true \
                     -s directAccessGrantsEnabled=true \
@@ -119,11 +122,11 @@ spec:
                 '["https://vault.lowjungxuan.dpdns.org"]'
 
               upsert_client "$ARGOCD_OIDC_CLIENT_ID" "$ARGOCD_OIDC_CLIENT_SECRET" \
-                '["https://argocd.lowjungxuan.dpdns.org/auth/callback"]' \
+                '["https://argocd.lowjungxuan.dpdns.org/auth/callback","https://argocd.lowjungxuan.dpdns.org/*"]' \
                 '["https://argocd.lowjungxuan.dpdns.org"]'
 
               MINIO_UUID=$(upsert_client "$MINIO_OIDC_CLIENT_ID" "$MINIO_OIDC_CLIENT_SECRET" \
-                '["https://minio.lowjungxuan.dpdns.org/oauth_callback"]' \
-                '["https://minio.lowjungxuan.dpdns.org"]')
+                '["https://minio.lowjungxuan.dpdns.org/oauth_callback","https://minio.lowjungxuan.dpdns.org/*","https://s3.lowjungxuan.dpdns.org/oauth_callback","https://s3.lowjungxuan.dpdns.org/*"]' \
+                '["https://minio.lowjungxuan.dpdns.org","https://s3.lowjungxuan.dpdns.org"]')
 
               upsert_minio_policy_mapper "$MINIO_UUID"

@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-auth-config
+  annotations:
+    argocd.argoproj.io/sync-options: Force=true,Replace=true
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      serviceAccountName: vault-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: configure
+          image: alpine/k8s:1.33.4
+          envFrom:
+            - secretRef:
+                name: server-secret
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              ROOT_TOKEN=$(kubectl get secret -n infra vault-bootstrap-secret \
+                -o jsonpath='{.data.VAULT_ROOT_TOKEN}' | base64 -d)
+
+              ve() {
+                kubectl exec -n infra vault-0 -- env VAULT_TOKEN="$ROOT_TOKEN" "$@"
+              }
+
+              until ve vault status >/dev/null 2>&1; do
+                sleep 5
+              done
+
+              ve vault secrets enable -path=secret kv-v2 >/dev/null 2>&1 || true
+
+              kubectl exec -n infra vault-0 -- sh -ec "cat > /tmp/grim-k8s-read.hcl <<'EOF'
+              path \"secret/metadata\"                { capabilities = [\"list\"] }
+              path \"secret/metadata/grim-k8s\"       { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/grim-k8s/*\"     { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/grim-app-secret\" { capabilities = [\"list\", \"read\"] }
+              path \"secret/data/grim-k8s\"           { capabilities = [\"read\"] }
+              path \"secret/data/grim-k8s/*\"         { capabilities = [\"read\"] }
+              path \"secret/data/grim-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
+              path \"auth/oidc/role/keycloak\"        { capabilities = [\"read\"] }
+              EOF
+              VAULT_TOKEN='$ROOT_TOKEN' vault policy write grim-k8s-read /tmp/grim-k8s-read.hcl"
+
+              ve vault auth enable kubernetes >/dev/null 2>&1 || true
+              ve vault write auth/kubernetes/config \
+                kubernetes_host=https://kubernetes.default.svc
+              ve vault write auth/kubernetes/role/vso-grim-k8s \
+                bound_service_account_names=vault-secrets-operator \
+                bound_service_account_namespaces=infra,argocd \
+                policies=grim-k8s-read \
+                audience=vault \
+                ttl=1h
+
+              ve vault auth enable oidc >/dev/null 2>&1 || true
+              ve vault auth tune -listing-visibility=unauth oidc
+              ve vault write auth/oidc/config \
+                oidc_discovery_url=https://keycloak.lowjungxuan.dpdns.org/realms/master \
+                oidc_client_id="$OIDC_CLIENT_ID" \
+                oidc_client_secret="$OIDC_CLIENT_SECRET" \
+                default_role=keycloak
+              ve vault write auth/oidc/role/keycloak \
+                role_type=oidc \
+                user_claim=preferred_username \
+                oidc_scopes=openid,email,profile \
+                allowed_redirect_uris=https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback,http://localhost:8250/oidc/callback \
+                policies=default,grim-k8s-read \
+                ttl=1h

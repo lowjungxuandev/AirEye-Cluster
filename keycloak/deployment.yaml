@@ -25,6 +25,8 @@ spec:
             - secretRef:
                 name: server-secret
           env:
+            - name: KC_HEALTH_ENABLED
+              value: "true"
             - name: JAVA_OPTS_KC_HEAP
               value: "-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=60"
             - name: KC_DB_PASSWORD
@@ -40,14 +42,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 8080
+              port: 9000
             initialDelaySeconds: 60
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 8080
+              port: 9000
             initialDelaySeconds: 120
             periodSeconds: 20
             failureThreshold: 3
