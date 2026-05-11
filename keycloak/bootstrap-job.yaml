@@ -25,11 +25,18 @@ spec:
               SERVER=http://keycloak.infra.svc.cluster.local
               REALM=master
 
-              "$KCADM" config credentials \
-                --server "$SERVER" \
-                --realm "$REALM" \
-                --user "$KEYCLOAK_ADMIN" \
-                --password "$KEYCLOAK_ADMIN_PASSWORD"
+              # First run: temp bootstrap admin (KEYCLOAK_ADMIN) exists.
+              # Subsequent runs: it's been deleted; fall back to the
+              # permanent admin (KEYCLOAK_USER_USERNAME).
+              if ! "$KCADM" config credentials \
+                  --server "$SERVER" --realm "$REALM" \
+                  --user "$KEYCLOAK_ADMIN" \
+                  --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null 2>&1; then
+                "$KCADM" config credentials \
+                  --server "$SERVER" --realm "$REALM" \
+                  --user "$KEYCLOAK_USER_USERNAME" \
+                  --password "$KEYCLOAK_USER_PASSWORD"
+              fi
 
               upsert_user() {
                 USER_ID=$("$KCADM" get users -r "$REALM" -q username="$KEYCLOAK_USER_USERNAME" --fields id --format csv --noquotes | head -n 1)
@@ -135,3 +142,22 @@ spec:
                 '["https://minio.lowjungxuan.dpdns.org","https://s3.lowjungxuan.dpdns.org"]')
 
               upsert_minio_policy_mapper "$MINIO_UUID"
+
+              # Drop the temporary bootstrap admin so the Keycloak banner
+              # clears. Re-auth as the permanent admin first (the temp
+              # admin can't delete itself if it's the active session).
+              # Keycloak won't re-create the temp admin on next start
+              # because KEYCLOAK_USER_USERNAME still has the admin role.
+              if [ "$KEYCLOAK_USER_USERNAME" != "$KEYCLOAK_ADMIN" ]; then
+                TEMP_ADMIN_ID=$("$KCADM" get users -r "$REALM" \
+                  -q username="$KEYCLOAK_ADMIN" --fields id \
+                  --format csv --noquotes | head -n 1)
+                if [ -n "$TEMP_ADMIN_ID" ]; then
+                  "$KCADM" config credentials \
+                    --server "$SERVER" --realm "$REALM" \
+                    --user "$KEYCLOAK_USER_USERNAME" \
+                    --password "$KEYCLOAK_USER_PASSWORD"
+                  "$KCADM" delete "users/$TEMP_ADMIN_ID" -r "$REALM" \
+                    >/dev/null 2>&1 || true
+                fi
+              fi
