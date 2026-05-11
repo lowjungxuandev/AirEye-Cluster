@@ -1,70 +1,107 @@
 # Refactor summary
 
-> **Superseded by the 2026-05-11 VSO migration.** The directory names
-> `external-secrets/` and `reloader/` referenced below no longer exist —
-> they were removed when the repo switched from ESO + Stakater Reloader to
-> the HashiCorp Vault Secrets Operator. Kept for historical context only.
+Cumulative record of structural changes since the repo was first laid out.
+No runtime behavior changes were introduced by renames; behavior changes
+came from the VSO migration (below) and the issue fixes captured in
+[issue.md](issue.md).
 
-This document records the cleanup pass that introduced `docs/` and `scripts/`.
-No runtime behavior changed — confirmed by a byte-identical
-`kubectl kustomize --enable-helm` render before and after.
+## 2026-05-11 — VSO migration
 
-## Renamed
+Switched cluster secret sync from **External Secrets Operator (ESO) +
+Stakater Reloader** to the **HashiCorp Vault Secrets Operator (VSO)**.
 
-Files renamed via `git mv` so the filename describes the kind of resource it
-contains.
+### Removed
 
-| Before                                  | After                                       |
-|------------------------------------------|---------------------------------------------|
-| `argocd/secrets.yaml`                    | `argocd/external-secrets.yaml`              |
-| `external-secrets/server-secret.yaml`    | `external-secrets/external-secrets.yaml`    |
-| `keycloak/bootstrap.yaml`                | `keycloak/bootstrap-job.yaml`               |
-| `vault/auto-unseal.yaml`                 | `vault/auto-unseal-cronjob.yaml`            |
-| `redis/smoke-test.yaml`                  | `redis/smoke-test-job.yaml`                 |
-| `postgres/init.yaml`                     | `postgres/init-configmap.yaml`              |
+- `external-secrets/` directory — replaced by `vault-secrets-operator/`.
+- `reloader/` directory — replaced by VSO's built-in `rolloutRestartTargets`.
+- All `ExternalSecret`, `SecretStore`, `ClusterSecretStore` resources.
+- All Reloader annotations on Deployments/StatefulSets.
 
-Each component's `kustomization.yaml` was updated to match.
+### Added
 
-## Removed
+- `vault-secrets-operator/` — `ServiceAccount`, `VaultConnection`,
+  `VaultAuth` (kubernetes method), and per-app `VaultStaticSecret`
+  resources with `refreshAfter: 30s` and `rolloutRestartTargets`.
+- `argocd/applications/vault-secrets-operator.yaml` — standalone ArgoCD
+  Application installing the VSO Helm chart, annotated
+  `argocd.argoproj.io/sync-wave: "-1"` so it lands before every business
+  Application.
+- `argocd/vault-secrets.yaml` — ArgoCD-namespace `VaultStaticSecret`s
+  (`argocd-redis`, `argocd-keycloak-oidc`) with VSO transformation
+  templates and labels for ArgoCD ownership.
+- `vault/auth-config-job.yaml` — Job that configures Vault's Kubernetes
+  auth role + OIDC auth method + `keycloak` role + `grim-k8s-read`
+  policy (idempotent; re-runs on every sync).
 
-- `argocd/patches/delete-bundled-redis.yaml` — referenced no live resource.
-  ArgoCD v3.4.1 stopped shipping a bundled `argocd-redis` Deployment/Service,
-  so the `$patch: delete` blocks targeted nothing and the file was already
-  unreferenced from `argocd/kustomization.yaml`.
-- `argocd/charts/` from `.gitignore` — `argocd/` is not a Helm chart in this
-  repo. Stale entry.
+### Why each piece
 
-## Added
+| Choice | Reason |
+|--------|--------|
+| `destination.overwrite: true` on every `VaultStaticSecret` | VSO refused to take over Secrets pre-created during bootstrap. |
+| `ignoreDifferences` on `Secret /data` in `argocd/applications/grim-k8s.yaml` | VSO mutates `/data` on every sync; without this, ArgoCD would flag every refreshed Secret as `OutOfSync`. |
+| Sync-wave `-1` on the VSO Application | VSO CRDs must exist before any `VaultStaticSecret` in the rest of the repo. |
 
-- `docs/architecture.md` — component map, namespaces, sync waves, bootstrap order.
-- `docs/secret-refresh-flow.md` — Vault → ESO → Secret → Reloader → Pod.
-- `docs/troubleshooting.md` — read-only diagnostic commands.
-- `docs/refactor-summary.md` — this file.
-- `scripts/validate.sh` — local pre-sync checks (kustomize render, optional
-  yamllint/kubeconform).
-- `scripts/troubleshoot-secrets.sh` — read-only kubectl helpers for ESO + Reloader.
+See [secret-refresh-flow.md](secret-refresh-flow.md) for the data path
+and [deployment-sequence.md](deployment-sequence.md) for the full
+bootstrap ordering.
 
-## Preserved (intentionally)
+## 2026-05-11 — Issue fixes baked in
 
-- Top-level flat layout: `argocd/`, `cert-manager/`, `external-secrets/`,
-  `grim-app/`, `ingress-nginx/`, `keycloak/`, `minio/`, `postgres/`, `redis/`,
-  `reloader/`, `vault/`.  No `apps/` vs `platform/` split — chosen for lower
-  churn at this repo size.
-- ArgoCD `path: .` for the self-managed `grim-k8s` Application.
-- Inline patches inside `argocd/kustomization.yaml` (replicas: 0 for
-  AppSet/Dex/Notifications, resource caps).
-- `redis/smoke-test-job.yaml` — re-runs every ArgoCD sync via
-  `Force=true,Replace=true`. Useful as a continuous health probe.
-- All selector labels (`app: <name>`).  Changing them would break running
-  pods; the cleanup pass deliberately avoided this.
+The 10 issues documented in [issue.md](issue.md) are all closed in YAML.
+Concretely:
 
-## Manual review
+- `keycloak/deployment.yaml` — `KC_HEALTH_ENABLED=true`, probes on port
+  `9000`.
+- `keycloak/bootstrap-job.yaml` — broadened MinIO redirect URIs (console
+  + S3 hosts), idempotent client upsert so ArgoCD/MinIO/Vault OIDC
+  clients stay in sync with the Secret.
+- `cert-manager/cluster-issuer.yaml` — single `letsencrypt` ClusterIssuer
+  (production ACME endpoint). Every ingress references it by name. Swap
+  the `server:` field to the staging endpoint if the prod Let's Encrypt
+  rate limit ever re-trips (see [issue.md](issue.md)).
+- `vault-secrets-operator/{server,grim-app}-secret.yaml` —
+  `destination.overwrite: true`.
+- `argocd/vault-secrets.yaml` — `argocd-keycloak-oidc` Secret gets
+  `app.kubernetes.io/part-of: argocd` labels and `overwrite: true`.
+- `vault/auth-config-job.yaml` — configures the OIDC role/policy/tune
+  settings that used to be applied manually.
 
-- The smoke-test Job rebuilds on every sync. If it becomes noisy, consider
-  removing it in a follow-up. Behavior is unchanged here.
-- Per-component `app.kubernetes.io/component` labels are not added. They'd
-  be safe via Kustomize `labels: includeSelectors: false`, but the value is
-  marginal at this repo size.
+## Earlier renames (historical)
+
+Filenames were normalized so each describes the resource kind it
+contains. Component `kustomization.yaml` files were updated to match.
+
+| Before | After |
+|--------|-------|
+| `keycloak/bootstrap.yaml` | `keycloak/bootstrap-job.yaml` |
+| `vault/auto-unseal.yaml` | `vault/auto-unseal-cronjob.yaml` |
+| `redis/smoke-test.yaml` | `redis/smoke-test-job.yaml` |
+| `postgres/init.yaml` | `postgres/init-configmap.yaml` |
+
+(The `argocd/secrets.yaml` → `argocd/external-secrets.yaml` and
+`external-secrets/` renames from the pre-VSO refactor are no longer
+relevant — those files were deleted in the VSO migration.)
+
+## Current directory layout
+
+Top-level, flat — no `apps/` vs `platform/` split:
+
+```
+argocd/                 cert-manager/         docs/
+grim-app/               ingress-nginx/        keycloak/
+minio/                  postgres/             redis/
+scripts/                vault/                vault-secrets-operator/
+```
+
+ArgoCD's self-managed `grim-k8s` Application points at `path: .` so the
+root `kustomization.yaml` defines what's in cluster scope.
+
+## Scripts
+
+- `scripts/validate.sh` — local pre-sync checks: `kubectl kustomize
+  --enable-helm`, optional `yamllint`/`kubeconform`.
+- `scripts/troubleshoot-secrets.sh` — read-only diagnostics for the
+  Vault → VSO → Secret → rollout chain.
 
 ## Validation
 
@@ -72,8 +109,8 @@ Each component's `kustomization.yaml` was updated to match.
 bash scripts/validate.sh
 ```
 
-If kubeconform and yamllint are installed, the script also runs them. Neither
-is required.
+`yamllint` and `kubeconform` are picked up if installed; neither is
+required.
 
 ## Sync after merge
 

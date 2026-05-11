@@ -36,7 +36,7 @@ server:
     enabled: true
     ingressClassName: nginx
     annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
+      cert-manager.io/cluster-issuer: letsencrypt
       nginx.ingress.kubernetes.io/proxy-body-size: "0"
     hosts:
       - host: vault.lowjungxuan.dpdns.org

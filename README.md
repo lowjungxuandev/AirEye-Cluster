@@ -6,7 +6,7 @@ Secrets Operator (VSO) pulling from Vault.
 
 - Architecture overview → [docs/architecture.md](docs/architecture.md)
 - Vault → Secret → Pod restart flow → [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md)
-- Diagnostic commands → [docs/troubleshooting.md](docs/troubleshooting.md)
+- Issues, diagnostics, and fixes → [docs/issue.md](docs/issue.md)
 - What changed in the last cleanup pass → [docs/refactor-summary.md](docs/refactor-summary.md)
 
 ## Stack

@@ -1,6 +1,40 @@
 # Secret refresh flow
 
-How a Vault edit reaches a running pod.
+How secrets get into the cluster (VSO seeding) and how a Vault edit reaches
+a running pod (refresh flow). All driven by the HashiCorp **Vault Secrets
+Operator (VSO)** — no External Secrets Operator, no Reloader.
+
+## Capability 1 — VSO seeding
+
+Two layers of resources: cluster-level (one-time) and app-level (per
+application).
+
+### Cluster-level (sync-wave `-1`)
+
+| Resource | File | Purpose |
+|----------|------|---------|
+| ArgoCD `Application: vault-secrets-operator` | `argocd/applications/vault-secrets-operator.yaml` | Installs the VSO Helm chart into the `vault-secrets-operator` namespace. Annotated `argocd.argoproj.io/sync-wave: "-1"` so it lands before any business Application. |
+| `VaultConnection` | `vault-secrets-operator/vault-connection.yaml` | Declares the Vault server address (`http://vault.infra.svc.cluster.local:8200`). One per cluster. |
+| `VaultAuth` | `vault-secrets-operator/vault-auth.yaml` | Configures the Kubernetes auth method (`mount: kubernetes`, `role: vso-grim-k8s`), bound to the `vault-secrets-operator` ServiceAccount that VSO uses to authenticate against Vault. |
+| `ServiceAccount: vault-secrets-operator` | `vault-secrets-operator/service-account.yaml` | The SA referenced by `VaultAuth.spec.kubernetes.serviceAccount`. |
+
+### App-level (same wave as the workload)
+
+| Resource | File | Purpose |
+|----------|------|---------|
+| `VaultStaticSecret` | `vault-secrets-operator/grim-app-secret.yaml`, `server-secret.yaml` | Maps a Vault KV path → a k8s Secret. Sets `refreshAfter: 30s` and `rolloutRestartTargets`. |
+| `Deployment` envFrom | `grim-app/deployment.yaml` | App reads the k8s Secret VSO writes via `envFrom.secretRef.name`. |
+
+The `VaultStaticSecret` can share the same sync wave as its Deployment — if
+the Pod starts before the Secret exists, Kubernetes retries automatically.
+
+### Out of scope for kustomize
+
+Initializing data inside Vault (`vault kv put ...`) and configuring Vault
+roles/policies/auth backends are handled manually or via Terraform by the
+Vault administrator. None of that lives in YAML.
+
+## Capability 2 — pods auto-pick-up secret updates
 
 ```
 ┌────────────────────┐
@@ -30,20 +64,23 @@ How a Vault edit reaches a running pod.
 └────────────────────┘
 ```
 
-## Why each piece exists
+### Why each piece exists
 
 - **`refreshAfter: 30s`** — bounds how stale Kubernetes can be vs. Vault.
-- **`destination.create: true`** — VSO owns and overwrites the Secret.
-  Manual edits to the K8s Secret are clobbered on next sync.
+- **`destination.create: true` + `overwrite: true`** — VSO owns and
+  overwrites the Secret. Manual edits to the K8s Secret are clobbered on
+  next sync.
 - **`rolloutRestartTargets`** — `envFrom` env vars are baked into the pod
   at startup. VSO triggers a rollout restart on each listed workload when
-  the Secret content changes. No Reloader needed.
+  the Secret content changes. **No Reloader needed.**
 
-## ArgoCD drift
+### ArgoCD drift handling
 
-VSO mutates the `/data` field of every Secret it manages. The grim-k8s
-ArgoCD Application sets `ignoreDifferences` to exclude that field so the
-Application stays `Synced`. See `argocd/applications/grim-k8s.yaml`.
+Vault edits never reach git, but VSO mutates the `/data` field of every
+Secret it manages — ArgoCD would normally flag this as `OutOfSync`. The
+`grim-k8s` Application sets `ignoreDifferences` to exclude `/data` on
+`kind: Secret` so the Application stays `Synced`. See
+`argocd/applications/grim-k8s.yaml`.
 
 ## Force a refresh manually
 
