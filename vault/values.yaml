@@ -7,6 +7,9 @@ injector:
 
 server:
   enabled: true
+  image:
+    repository: "hashicorp/vault"
+    tag: "2.0.0"
   resources:
     requests:
       memory: 256Mi
