@@ -55,16 +55,37 @@ Concretely:
 - `keycloak/bootstrap-job.yaml` — broadened MinIO redirect URIs (console
   + S3 hosts), idempotent client upsert so ArgoCD/MinIO/Vault OIDC
   clients stay in sync with the Secret.
-- `cert-manager/cluster-issuer.yaml` — single `letsencrypt` ClusterIssuer
-  (production ACME endpoint). Every ingress references it by name. Swap
-  the `server:` field to the staging endpoint if the prod Let's Encrypt
-  rate limit ever re-trips (see [issue.md](issue.md)).
 - `vault-secrets-operator/{server,grim-app}-secret.yaml` —
   `destination.overwrite: true`.
 - `argocd/vault-secrets.yaml` — `argocd-keycloak-oidc` Secret gets
   `app.kubernetes.io/part-of: argocd` labels and `overwrite: true`.
 - `vault/auth-config-job.yaml` — configures the OIDC role/policy/tune
   settings that used to be applied manually.
+
+## 2026-05-12 — cert-manager removed, Cloudflare Origin Certs
+
+Removed `cert-manager/` and the `letsencrypt` ClusterIssuer entirely.
+Public TLS is now handled by Cloudflare: the edge terminates with
+Cloudflare's own cert, and the cluster presents a Cloudflare Origin
+Certificate (15-year validity) to the proxy. Each ingress now references
+a manually-created `kubernetes.io/tls` Secret instead of a cert-manager
+issuer annotation.
+
+### Why
+
+- HTTP-01 ACME breaks when hosts are orange-clouded — Cloudflare
+  intercepts `/.well-known/acme-challenge/...` and the LE rate limit
+  closes in (issue #6 in [issue.md](issue.md)).
+- Origin Certs are free, valid 15 years, and trusted by Cloudflare in
+  Full (Strict) SSL mode — no operator, no renewal automation.
+
+### What changed
+
+- Deleted `cert-manager/` directory and the root kustomization entry.
+- Stripped `cert-manager.io/cluster-issuer` annotations from all 5
+  ingresses (`grim-app`, `argocd`, `minio`, `keycloak`, `vault`).
+- Added [cloudflare-proxy.md](cloudflare-proxy.md) covering the proxy
+  setup, Origin Cert generation, and Secret install.
 
 ## Earlier renames (historical)
 
@@ -87,10 +108,10 @@ relevant — those files were deleted in the VSO migration.)
 Top-level, flat — no `apps/` vs `platform/` split:
 
 ```
-argocd/                 cert-manager/         docs/
-grim-app/               ingress-nginx/        keycloak/
-minio/                  postgres/             redis/
-scripts/                vault/                vault-secrets-operator/
+argocd/                 docs/                 grim-app/
+ingress-nginx/          keycloak/             minio/
+postgres/               redis/                scripts/
+vault/                  vault-secrets-operator/
 ```
 
 ArgoCD's self-managed `grim-k8s` Application points at `path: .` so the

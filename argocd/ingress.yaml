@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: argocd-server
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt
     nginx.ingress.kubernetes.io/backend-protocol: HTTP
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 spec:

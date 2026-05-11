@@ -10,7 +10,6 @@ resources:
   - keycloak
   - minio
   - grim-app
-  - cert-manager/cluster-issuer.yaml
 
 labels:
   - includeSelectors: false

@@ -6,6 +6,7 @@ Secrets Operator (VSO) pulling from Vault.
 
 - Architecture overview → [docs/architecture.md](docs/architecture.md)
 - Vault → Secret → Pod restart flow → [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md)
+- Cloudflare proxy + Origin Cert TLS → [docs/cloudflare-proxy.md](docs/cloudflare-proxy.md)
 - Issues, diagnostics, and fixes → [docs/issue.md](docs/issue.md)
 - What changed in the last cleanup pass → [docs/refactor-summary.md](docs/refactor-summary.md)
 
@@ -14,7 +15,6 @@ Secrets Operator (VSO) pulling from Vault.
 | Component       | Purpose                              | Source                                 |
 |-----------------|--------------------------------------|----------------------------------------|
 | ingress-nginx   | Cluster ingress (hostNetwork)        | Upstream baremetal manifest            |
-| cert-manager    | Let's Encrypt TLS                    | Upstream + `ClusterIssuer`             |
 | postgres        | DB for keycloak + vault              | `postgres:18-alpine`                   |
 | redis           | Cache backend for ArgoCD             | `redis:8-alpine`                       |
 | keycloak        | Identity provider (OIDC)             | `quay.io/keycloak/keycloak:26.6.1`     |
@@ -37,7 +37,6 @@ Secrets Operator (VSO) pulling from Vault.
 │   ├── patches/                  # config + tolerations
 │   ├── vault-secrets.yaml        # VaultConnection/VaultAuth + VSS for argocd ns
 │   └── ingress.yaml
-├── cert-manager/                 # operator (manual) + ClusterIssuer (GitOps)
 ├── vault-secrets-operator/       # VaultConnection/VaultAuth + VSS for infra ns
 ├── ingress-nginx/                # bootstrapped manually
 ├── keycloak/                     # Deployment + bootstrap-job (registers OIDC clients)
@@ -56,9 +55,11 @@ Secrets Operator (VSO) pulling from Vault.
 ArgoCD takes over after step 5. Steps 1–4 are one-time manual setup.
 
 ```sh
-# 1. Cluster ingress + TLS issuer must be in place first.
+# 1. Cluster ingress must be in place first.
 kubectl apply -k ingress-nginx
-kubectl apply -k cert-manager
+
+# 1b. Install the Cloudflare Origin Cert as TLS Secrets — see
+#     docs/cloudflare-proxy.md for the full flow.
 
 # 2a. Pre-create secrets so postgres + vault can boot.
 #     VSO takes ownership (destination.create: true) once Vault is seeded.
@@ -224,4 +225,3 @@ Full flow with diagrams: [docs/secret-refresh-flow.md](docs/secret-refresh-flow.
 - **MinIO open-source archived 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
 - **ingress-nginx** plans to archive after Kubecon 2026; consider Gateway API / `ingate` migration in the future.
 - **ArgoCD v3.4** introduced an MS Teams Workflows breaking change — not applicable here (no Teams notifications configured).
-- **cert-manager v1.19** bumped Go to fix DNS SAN validation CVEs; no API changes for our `ClusterIssuer`.

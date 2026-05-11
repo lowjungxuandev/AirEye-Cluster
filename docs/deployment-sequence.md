@@ -8,7 +8,7 @@ afterwards. Read top-to-bottom on a first install; thereafter only the
 ## At a glance
 
 ```
-manual:  ingress-nginx → cert-manager → root kustomize → vault helm → vault config → argocd → argocd apps
+manual:  ingress-nginx → CF Origin Cert Secrets → root kustomize → vault helm → vault config → argocd → argocd apps
 gitops:  ArgoCD reconciles root path "." on every commit, in sync-wave order
 ```
 
@@ -19,20 +19,17 @@ onwards is GitOps — ArgoCD is the only thing that touches the cluster.
 
 ### 1. Cluster prereqs
 
-`ingress-nginx` and `cert-manager` must exist before anything that needs
-ingress or TLS:
+Install ingress-nginx and the Cloudflare Origin Cert TLS Secrets before
+anything else needs ingress or TLS:
 
 ```sh
 kubectl apply -k ingress-nginx
-kubectl -n cert-manager rollout status deployment/cert-manager --timeout=180s
-kubectl -n cert-manager rollout status deployment/cert-manager-cainjector --timeout=180s
-kubectl -n cert-manager rollout status deployment/cert-manager-webhook --timeout=180s
 ```
 
-The cert-manager webhook check matters — the `ClusterIssuer` in
-`cert-manager/cluster-issuer.yaml` calls it during admission and apply
-will fail with `connect: connection refused` otherwise. Issue #2 in
-[issue.md](issue.md).
+Then follow [cloudflare-proxy.md](cloudflare-proxy.md) to create the 5
+TLS Secrets (`grim-app-tls`, `keycloak-tls`, `vault-tls`, `minio-tls` in
+`infra`; `argocd-tls` in `argocd`). ingress-nginx reads each ingress'
+`tls.secretName` directly — no operator needed.
 
 ### 2. Pre-create bootstrap Secrets
 
@@ -58,9 +55,6 @@ This installs:
   `ServiceAccount`, the per-app `VaultStaticSecret` resources). The
   **VSO controller itself** is installed separately in step 7 by ArgoCD.
 - `postgres`, `redis`, `keycloak`, `minio`, `grim-app`.
-- `cert-manager/cluster-issuer.yaml` — single `letsencrypt` ClusterIssuer
-  (prod ACME endpoint). Flip the `server:` field to the staging endpoint
-  if the Let's Encrypt rate limit re-trips (issue #6).
 
 The `VaultStaticSecret` resources will sit in `SecretSynced=False` until
 step 7 brings up the VSO controller and step 5 seeds Vault.

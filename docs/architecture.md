@@ -9,7 +9,7 @@ except ArgoCD (in `argocd`) and the Vault Secrets Operator (in
 | Layer        | Component                | Role                                                  |
 |--------------|--------------------------|-------------------------------------------------------|
 | Network      | ingress-nginx            | Cluster ingress (hostNetwork)                         |
-| TLS          | cert-manager             | Let's Encrypt issuer (HTTP-01)                        |
+| TLS          | Cloudflare proxy         | Edge TLS + Origin Certificate (see [cloudflare-proxy.md](cloudflare-proxy.md)) |
 | Data         | postgres                 | DB for keycloak + vault                               |
 | Cache        | redis                    | ArgoCD session/state cache                            |
 | Identity     | keycloak                 | OIDC IdP for ArgoCD, MinIO, Vault UI                  |
@@ -47,10 +47,11 @@ Vault KV  →  VSO (refreshAfter: 30s)  →  K8s Secret  →  rolloutRestartTarg
 
 Resources marked **manual** must be applied before ArgoCD takes over.
 
-1. **manual** — `ingress-nginx`, `cert-manager`
+1. **manual** — `ingress-nginx`; install the Cloudflare Origin Cert as
+   per-ingress TLS Secrets (see [cloudflare-proxy.md](cloudflare-proxy.md))
 2. **manual** — pre-create `server-secret` and `grim-app-secret` (placeholder values)
 3. **manual** — `kubectl apply -k .` (postgres, redis, keycloak, minio, grim-app,
-   ClusterIssuer, plus VSO CRs in `vault-secrets-operator/`)
+   plus VSO CRs in `vault-secrets-operator/`)
 4. **manual** — `kubectl kustomize --enable-helm vault | kubectl apply -f -`
    - `vault-bootstrap` initialises + unseals Vault (one-shot Job)
    - `vault-auto-unseal` CronJob keeps it unsealed
