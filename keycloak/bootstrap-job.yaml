@@ -69,7 +69,7 @@ spec:
                     -s standardFlowEnabled=true \
                     -s directAccessGrantsEnabled=true \
                     -s "redirectUris=$REDIRECT_URIS" \
-                    -s "webOrigins=$WEB_ORIGINS"
+                    -s "webOrigins=$WEB_ORIGINS" >&2
                   UUID=$("$KCADM" get clients -r "$REALM" -q clientId="$CLIENT_ID" --fields id --format csv --noquotes | head -n 1)
                 else
                   "$KCADM" update "clients/$UUID" -r "$REALM" \
@@ -79,7 +79,7 @@ spec:
                     -s standardFlowEnabled=true \
                     -s directAccessGrantsEnabled=true \
                     -s "redirectUris=$REDIRECT_URIS" \
-                    -s "webOrigins=$WEB_ORIGINS"
+                    -s "webOrigins=$WEB_ORIGINS" >&2
                 fi
                 printf '%s' "$UUID"
               }
