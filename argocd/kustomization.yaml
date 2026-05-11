@@ -59,10 +59,9 @@ patches:
               - name: argocd-application-controller
                 resources:
                   requests:
-                    cpu: 100m
-                    memory: 256Mi
+                    cpu: 200m
+                    memory: 384Mi
                   limits:
-                    cpu: 500m
                     memory: 768Mi
   - patch: |-
       apiVersion: apps/v1
@@ -76,10 +75,9 @@ patches:
               - name: argocd-repo-server
                 resources:
                   requests:
-                    cpu: 50m
+                    cpu: 100m
                     memory: 128Mi
                   limits:
-                    cpu: 500m
                     memory: 512Mi
   - patch: |-
       apiVersion: apps/v1
@@ -93,8 +91,7 @@ patches:
               - name: argocd-server
                 resources:
                   requests:
-                    cpu: 50m
+                    cpu: 100m
                     memory: 128Mi
                   limits:
-                    cpu: 500m
                     memory: 512Mi

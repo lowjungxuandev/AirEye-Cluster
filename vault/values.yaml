@@ -9,11 +9,10 @@ server:
   enabled: true
   resources:
     requests:
-      memory: 128Mi
-      cpu: 50m
+      memory: 256Mi
+      cpu: 100m
     limits:
       memory: 512Mi
-      cpu: 500m
   dataStorage:
     enabled: false
   standalone:
