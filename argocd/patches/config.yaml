@@ -19,6 +19,7 @@ metadata:
 data:
   server.insecure: "true"
   redis.server: redis.infra.svc.cluster.local:6379
+  redis.password: $argocd-redis:auth
   redis.compression: gzip
 ---
 apiVersion: v1

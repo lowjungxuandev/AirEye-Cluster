@@ -39,6 +39,14 @@ patches:
       name: argocd-notifications-controller
       version: v1
   - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+    target:
+      kind: StatefulSet
+      name: argocd-redis
+      version: v1
+  - patch: |-
       apiVersion: apps/v1
       kind: StatefulSet
       metadata:

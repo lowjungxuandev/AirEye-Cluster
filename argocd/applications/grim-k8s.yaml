@@ -19,13 +19,19 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
   ignoreDifferences:
     - group: ""
       kind: Secret
       jsonPointers:
         - /data
-    - group: ""
-      kind: Secret
       jqPathExpressions:
         - .metadata.annotations."app.kubernetes.io/managed-by"
         - .metadata.labels."app.kubernetes.io/managed-by"
