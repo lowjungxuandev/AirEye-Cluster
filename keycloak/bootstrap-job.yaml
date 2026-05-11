@@ -117,6 +117,11 @@ spec:
 
               upsert_user
 
+              # Grant master-realm admin to the bootstrap user (idempotent).
+              "$KCADM" add-roles -r "$REALM" \
+                --uusername "$KEYCLOAK_USER_USERNAME" \
+                --rolename admin >/dev/null 2>&1 || true
+
               upsert_client "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" \
                 '["https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback","http://localhost:8250/oidc/callback"]' \
                 '["https://vault.lowjungxuan.dpdns.org"]'
