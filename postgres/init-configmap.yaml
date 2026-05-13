@@ -20,6 +20,18 @@ data:
         GRANT ALL PRIVILEGES ON DATABASE vault TO vault;
     EOSQL
 
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE DATABASE sub2api;
+        CREATE USER sub2api WITH PASSWORD '${SUB2API_DB_PASSWORD}';
+        GRANT ALL PRIVILEGES ON DATABASE sub2api TO sub2api;
+    EOSQL
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "sub2api" <<-EOSQL
+        GRANT ALL ON SCHEMA public TO sub2api;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO sub2api;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO sub2api;
+    EOSQL
+
     psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "keycloak" <<-EOSQL
         GRANT ALL ON SCHEMA public TO keycloak;
         GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO keycloak;

@@ -23,6 +23,7 @@ Secrets Operator (VSO) pulling from Vault.
 | minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
 | argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
 | grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
+| sub2api         | AI API gateway / admin dashboard     | `ghcr.io/wei-shaw/sub2api:0.1.126`     |
 
 ## Folder structure
 
@@ -45,6 +46,7 @@ Secrets Operator (VSO) pulling from Vault.
 ├── redis/                        # StatefulSet + smoke-test job
 ├── vault/                        # Helm chart + bootstrap/seed/oidc/auto-unseal jobs
 ├── grim-app/                     # the application
+├── sub2api/                      # AI API gateway / admin dashboard
 │
 ├── docs/                      # architecture, secret flow, troubleshooting
 └── scripts/                   # validate.sh, troubleshoot-secrets.sh
@@ -156,6 +158,7 @@ wave 0   VaultStaticSecret/grim-app-secret   (Secret must exist before pod)
 wave 0   everything else (default)
 wave 10  Job/keycloak-bootstrap              (Keycloak must be running)
 wave 10  Deployment/grim-app                 (consumes grim-app-secret)
+wave 10  Deployment/sub2api                  (consumes sub2api-secret)
 ```
 
 ## Validation
@@ -179,6 +182,7 @@ installed, `yamllint` and `kubeconform`.
 | `minio.lowjungxuan.dpdns.org`             | MinIO console     |
 | `s3.lowjungxuan.dpdns.org`                | MinIO S3 API      |
 | `api.lowjungxuan.dpdns.org`               | grim-app backend  |
+| `sub2api.lowjungxuan.dpdns.org`           | sub2api admin/API  |
 
 ## Health checks
 

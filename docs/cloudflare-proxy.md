@@ -38,7 +38,7 @@ rejected, public CAs are not required.
 In the Cloudflare dashboard for `lowjungxuan.dpdns.org`:
 
 1. **SSL/TLS → Overview** → set to **Full (Strict)**.
-2. **DNS** → each of the 6 hosts below must be an A/AAAA record pointed
+2. **DNS** → each of the 7 hosts below must be an A/AAAA record pointed
    at the cluster's public IP with the **proxy toggle on** (orange cloud):
    - `argocd.lowjungxuan.dpdns.org`
    - `keycloak.lowjungxuan.dpdns.org`
@@ -46,6 +46,7 @@ In the Cloudflare dashboard for `lowjungxuan.dpdns.org`:
    - `minio.lowjungxuan.dpdns.org`
    - `s3.lowjungxuan.dpdns.org`
    - `api.lowjungxuan.dpdns.org`
+   - `sub2api.lowjungxuan.dpdns.org`
 3. **SSL/TLS → Edge Certificates** → confirm **Universal SSL** is Active.
    This is what visitors see.
 
@@ -55,7 +56,7 @@ Cloudflare dashboard → **SSL/TLS → Origin Server → Create Certificate**.
 
 - Key type: **ECDSA** (smaller, faster handshake) or RSA — either works.
 - Hostnames: `*.lowjungxuan.dpdns.org` and `lowjungxuan.dpdns.org`.
-  One cert covers all 6 hosts because they share the apex.
+  One cert covers all 7 hosts because they share the apex.
 - Validity: **15 years**.
 
 Save the two PEM blobs locally — Cloudflare only shows the private key
@@ -81,12 +82,13 @@ fixed in YAML — create one Secret per name, in the right namespace:
 | `infra` | `keycloak-tls` | `keycloak` ingress (`keycloak.…`) |
 | `infra` | `vault-tls` | `vault` helm-managed ingress (`vault.…`) |
 | `infra` | `minio-tls` | `minio` ingress (`minio.…`, `s3.…`) |
+| `infra` | `sub2api-tls` | `sub2api` ingress (`sub2api.…`) |
 | `argocd` | `argocd-tls` | `argocd-server` ingress (`argocd.…`) |
 
 All five hold the same wildcard cert + key:
 
 ```sh
-for name in grim-app-tls keycloak-tls vault-tls minio-tls; do
+for name in grim-app-tls keycloak-tls vault-tls minio-tls sub2api-tls; do
   kubectl -n infra create secret tls "$name" \
     --cert=origin.crt --key=origin.key \
     --dry-run=client -o yaml | kubectl apply -f -
