@@ -71,6 +71,10 @@ curl -s https://litellm.lowjungxuan.dpdns.org/v1/models \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY"
 ```
 
+For SSO, open `https://litellm.lowjungxuan.dpdns.org/ui` and use the SSO login
+button. Keycloak must allow redirect URI
+`https://litellm.lowjungxuan.dpdns.org/sso/callback`.
+
 ## Re-runnable Jobs
 
 `keycloak-bootstrap` and `litellm-postgres-init` carry

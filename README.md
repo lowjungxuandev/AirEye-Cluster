@@ -81,6 +81,11 @@ OPENROUTER_API_KEY
 NVIDIA_NIM_API_KEY
 ```
 
+LiteLLM SSO reuses the existing global Keycloak client values from
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`. VSO maps them into LiteLLM's
+`GENERIC_CLIENT_ID` and `GENERIC_CLIENT_SECRET` keys and adds the Keycloak OIDC
+endpoints.
+
 The existing platform keys for Postgres, Redis, Keycloak, MinIO, ArgoCD, and
 `grim-app-secret` are still required by their respective workloads.
 
@@ -130,6 +135,8 @@ curl -s https://litellm.lowjungxuan.dpdns.org/v1/models \
 The UI is available at `https://litellm.lowjungxuan.dpdns.org/ui`. The OpenAI
 compatible API is available at
 `https://litellm.lowjungxuan.dpdns.org/v1/chat/completions`.
+SSO uses `https://litellm.lowjungxuan.dpdns.org/sso/callback`; fallback
+username/password login remains available at `/fallback/login`.
 
 The initial model aliases in `litellm/configmap.yaml` are editable defaults.
 Update the provider model names there when you choose the exact OpenAI,

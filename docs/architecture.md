@@ -53,6 +53,8 @@ LiteLLM Admin UI SSO is not enabled by default because the open-source/enterpris
 boundary can change. The base deployment works with `LITELLM_MASTER_KEY`.
 Model aliases are defined in `litellm/configmap.yaml`; provider API keys stay in
 Vault and are injected through `litellm-secret`.
+The SSO wiring uses LiteLLM's generic OIDC provider variables and reuses the
+existing Keycloak global client credentials.
 
 ## Bootstrap Order
 
