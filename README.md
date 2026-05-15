@@ -141,6 +141,8 @@ DeepSeek, OpenRouter, and NVIDIA NIM models to expose.
 - Real secret values never enter git.
 - LiteLLM model aliases live in `litellm/configmap.yaml`; provider keys come
   only from Vault/VSO.
+- LiteLLM does not use VSO rollout restarts because startup runs Prisma
+  migrations; restart it manually after changing LiteLLM secrets.
 - Root kustomize adds the common `app.kubernetes.io/part-of` and
   `app.kubernetes.io/managed-by` labels.
 - Root kustomize adds control-plane tolerations for workloads.

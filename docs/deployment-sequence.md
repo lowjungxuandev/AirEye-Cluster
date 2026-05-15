@@ -78,6 +78,10 @@ curl -s https://litellm.lowjungxuan.dpdns.org/v1/models \
 recreates them on each sync instead of failing on immutable `Job.spec.template`
 changes.
 
+LiteLLM intentionally does not use VSO rollout restarts. Its startup path runs
+Prisma migrations, so repeated secret-refresh restarts can prevent the server
+from reaching port `4000`.
+
 ## Tear-down Order
 
 1. `kubectl delete -k argocd/applications`
