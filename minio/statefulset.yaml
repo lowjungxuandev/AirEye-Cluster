@@ -42,7 +42,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: server-secret
-                  key: MINIO_OIDC_CLIENT_ID
+                  key: OIDC_CLIENT_ID
             - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

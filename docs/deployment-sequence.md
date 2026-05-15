@@ -93,7 +93,8 @@ VSO can only sync what exists in Vault. Run the `vault kv put` commands
 in [architecture.md § Vault config (manual)](architecture.md#vault-config-manual)
 to populate `secret/grim-k8s` and `secret/grim-app-secret`.
 Also populate `secret/sub2api-secret`; it carries Sub2API runtime settings.
-All Keycloak OIDC clients share `OIDC_CLIENT_SECRET` from `secret/grim-k8s`.
+All Keycloak OIDC clients use `OIDC_CLIENT_ID=global` and share
+`OIDC_CLIENT_SECRET` from `secret/grim-k8s`.
 
 This step is deliberately not in YAML — see the GitOps note in
 [secret-refresh-flow.md § Out of scope for kustomize](secret-refresh-flow.md#out-of-scope-for-kustomize).

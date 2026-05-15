@@ -8,7 +8,7 @@ data:
   oidc.config: |
     name: Keycloak
     issuer: https://keycloak.lowjungxuan.dpdns.org/realms/master
-    clientID: argocd
+    clientID: global
     clientSecret: $argocd-keycloak-oidc:clientSecret
     requestedScopes: ["openid", "profile", "email"]
 ---

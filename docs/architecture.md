@@ -108,11 +108,9 @@ ve "vault kv put secret/grim-k8s \
   KC_DB_USERNAME='<...>' \
   KEYCLOAK_ADMIN='<...>' KEYCLOAK_ADMIN_PASSWORD='<...>' \
   KEYCLOAK_USER_USERNAME='<...>' KEYCLOAK_USER_PASSWORD='<...>' KEYCLOAK_USER_EMAIL='<...>' \
-  OIDC_CLIENT_ID=vault OIDC_CLIENT_SECRET='<openssl-rand-hex-32>' \
+  OIDC_CLIENT_ID=global OIDC_CLIENT_SECRET='<openssl-rand-hex-32>' \
   REDIS_PASSWORD='<...>' \
-  ARGOCD_OIDC_CLIENT_ID=argocd \
-  MINIO_ROOT_USER='<...>' MINIO_ROOT_PASSWORD='<...>' \
-  MINIO_OIDC_CLIENT_ID=minio"
+  MINIO_ROOT_USER='<...>' MINIO_ROOT_PASSWORD='<...>'"
 
 # --- 3. Seed the application-specific secret (do once; edit via Vault UI later) ---
 ve "vault kv put secret/grim-app-secret \

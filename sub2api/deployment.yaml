@@ -31,7 +31,10 @@ spec:
             - name: OIDC_CONNECT_PROVIDER_NAME
               value: Keycloak
             - name: OIDC_CONNECT_CLIENT_ID
-              value: sub2api
+              valueFrom:
+                secretKeyRef:
+                  name: server-secret
+                  key: OIDC_CLIENT_ID
             - name: OIDC_CONNECT_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

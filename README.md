@@ -82,13 +82,11 @@ kubectl -n infra create secret generic server-secret \
   --from-literal=KEYCLOAK_USER_USERNAME=<your-value> \
   --from-literal=KEYCLOAK_USER_PASSWORD=<your-value> \
   --from-literal=KEYCLOAK_USER_EMAIL=<your-value> \
-  --from-literal=OIDC_CLIENT_ID=vault \
+  --from-literal=OIDC_CLIENT_ID=global \
   --from-literal=OIDC_CLIENT_SECRET=<openssl-rand-hex-32> \
   --from-literal=REDIS_PASSWORD=<your-value> \
-  --from-literal=ARGOCD_OIDC_CLIENT_ID=argocd \
   --from-literal=MINIO_ROOT_USER=<your-value> \
   --from-literal=MINIO_ROOT_PASSWORD=<your-value> \
-  --from-literal=MINIO_OIDC_CLIENT_ID=minio \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n infra create secret generic grim-app-secret \

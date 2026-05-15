@@ -25,7 +25,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: server-secret
-                  key: MINIO_OIDC_CLIENT_ID
+                  key: OIDC_CLIENT_ID
             - name: CONSOLE_IDP_SECRET
               valueFrom:
                 secretKeyRef:
