@@ -24,7 +24,7 @@ spec:
               containerPort: 8080
           envFrom:
             - secretRef:
-                name: sub2api-secret
+                name: server-secret
           env:
             - name: OIDC_CONNECT_ENABLED
               value: "true"

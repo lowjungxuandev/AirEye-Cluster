@@ -71,12 +71,10 @@ kubectl -n infra create secret generic server-secret \
   --from-literal=POSTGRES_USER=<your-value> \
   --from-literal=POSTGRES_PASSWORD=<your-value> \
   --from-literal=POSTGRES_DB=<your-value> \
-  --from-literal=KEYCLOAK_DB_PASSWORD=<your-value> \
-  --from-literal=VAULT_DB_PASSWORD=<your-value> \
-  --from-literal=VAULT_PG_CONNECTION_URL='postgres://<vault-user>:<vault-pass>@postgres.infra.svc.cluster.local:5432/vault?sslmode=disable' \
+  --from-literal=VAULT_PG_CONNECTION_URL='postgres://postgres:<same-postgres-password>@postgres.infra.svc.cluster.local:5432/vault?sslmode=disable' \
   --from-literal=KC_DB=postgres \
   --from-literal=KC_DB_URL='jdbc:postgresql://postgres.infra.svc.cluster.local:5432/keycloak' \
-  --from-literal=KC_DB_USERNAME=<your-value> \
+  --from-literal=KC_DB_USERNAME=postgres \
   --from-literal=KEYCLOAK_ADMIN=<your-value> \
   --from-literal=KEYCLOAK_ADMIN_PASSWORD=<your-value> \
   --from-literal=KEYCLOAK_USER_USERNAME=<your-value> \
@@ -87,6 +85,22 @@ kubectl -n infra create secret generic server-secret \
   --from-literal=REDIS_PASSWORD=<your-value> \
   --from-literal=MINIO_ROOT_USER=<your-value> \
   --from-literal=MINIO_ROOT_PASSWORD=<your-value> \
+  --from-literal=ADMIN_EMAIL=<your-value> \
+  --from-literal=ADMIN_PASSWORD=<your-value> \
+  --from-literal=AUTO_SETUP=true \
+  --from-literal=DATABASE_HOST=postgres.infra.svc.cluster.local \
+  --from-literal=DATABASE_PORT=5432 \
+  --from-literal=DATABASE_USER=postgres \
+  --from-literal=DATABASE_PASSWORD=<same-postgres-password> \
+  --from-literal=DATABASE_DBNAME=sub2api \
+  --from-literal=DATABASE_SSLMODE=disable \
+  --from-literal=JWT_SECRET=<openssl-rand-hex-32> \
+  --from-literal=TOTP_ENCRYPTION_KEY=<openssl-rand-hex-32> \
+  --from-literal=REDIS_HOST=redis.infra.svc.cluster.local \
+  --from-literal=REDIS_PORT=6379 \
+  --from-literal=REDIS_DB=1 \
+  --from-literal=RUN_MODE=simple \
+  --from-literal=SIMPLE_MODE_CONFIRM=true \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n infra create secret generic grim-app-secret \
@@ -150,12 +164,12 @@ After step 5, ArgoCD reconciles every resource listed in the root
 
 ```
 wave -1  Application/vault-secrets-operator  (VSO must run before VSS reconcile)
+wave 0   VaultStaticSecret/server-secret     (shared infra + Sub2API runtime Secret)
 wave 0   VaultStaticSecret/grim-app-secret   (Secret must exist before pod)
-wave 0   VaultStaticSecret/sub2api-secret    (Secret must exist before pod/job)
 wave 0   everything else (default)
 wave 10  Job/keycloak-bootstrap              (Keycloak must be running)
 wave 10  Deployment/grim-app                 (consumes grim-app-secret)
-wave 10  Deployment/sub2api                  (consumes sub2api-secret)
+wave 10  Deployment/sub2api                  (consumes server-secret)
 ```
 
 ## Validation
@@ -208,8 +222,6 @@ kubectl -n infra annotate vaultstaticsecret server-secret \
   vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
 kubectl -n infra annotate vaultstaticsecret grim-app-secret \
   vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
-kubectl -n infra annotate vaultstaticsecret sub2api-secret \
-  vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
 
 # 2. (Only if a workload isn't in rolloutRestartTargets)
 kubectl -n infra rollout restart deployment grim-app
@@ -224,10 +236,11 @@ Full flow with diagrams: [docs/secret-refresh-flow.md](docs/secret-refresh-flow.
 - **Common labels**: `app.kubernetes.io/part-of: grim-k8s`, `app.kubernetes.io/managed-by: argocd` — applied at root level via kustomize `labels` (with `includeSelectors: false`).
 - **Tolerations**: Applied at root level via kustomize patches (no inline tolerations).
 - **Secrets**: Single source of truth is Vault (`secret/grim-k8s`,
-  `secret/grim-app-secret`, `secret/sub2api-secret`). Real values never enter git.
+  `secret/grim-app-secret`). Real values never enter git. `secret/grim-k8s`
+  backs `server-secret`, including shared infrastructure values and Sub2API
+  runtime settings.
 - **Sub2API OIDC**: Keycloak login is configured through environment values
-  from `secret/grim-k8s` / `server-secret`; Sub2API's normal runtime settings
-  still come from `secret/sub2api-secret`. If `oidc_connect_*` rows are later
+  from `secret/grim-k8s` / `server-secret`. If `oidc_connect_*` rows are later
   saved in Sub2API's admin settings table, those DB settings override the env
   fallback.
 

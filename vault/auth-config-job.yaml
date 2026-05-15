@@ -39,11 +39,9 @@ spec:
               path \"secret/metadata/grim-k8s\"       { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/grim-k8s/*\"     { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/grim-app-secret\" { capabilities = [\"list\", \"read\"] }
-              path \"secret/metadata/sub2api-secret\"  { capabilities = [\"list\", \"read\"] }
               path \"secret/data/grim-k8s\"           { capabilities = [\"read\"] }
               path \"secret/data/grim-k8s/*\"         { capabilities = [\"read\"] }
               path \"secret/data/grim-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
-              path \"secret/data/sub2api-secret\"     { capabilities = [\"create\", \"read\", \"update\"] }
               path \"auth/oidc/role/keycloak\"        { capabilities = [\"read\"] }
               EOF
               VAULT_TOKEN='$ROOT_TOKEN' vault policy write grim-k8s-read /tmp/grim-k8s-read.hcl"

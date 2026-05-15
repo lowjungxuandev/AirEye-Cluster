@@ -13,7 +13,7 @@ except ArgoCD (in `argocd`) and the Vault Secrets Operator (in
 | Data         | postgres                 | DB for keycloak + vault                               |
 | Cache        | redis                    | ArgoCD session/state cache                            |
 | Identity     | keycloak                 | OIDC IdP for ArgoCD, MinIO, Vault UI, Sub2API         |
-| Secrets      | vault                    | KV-v2 backend (`secret/grim-k8s`, `secret/grim-app-secret`, `secret/sub2api-secret`) |
+| Secrets      | vault                    | KV-v2 backend (`secret/grim-k8s`, `secret/grim-app-secret`) |
 | Sync         | vault-secrets-operator   | Pulls Vault secrets into Kubernetes Secrets (VSO)     |
 | Storage      | minio                    | S3-compatible object store + standalone console       |
 | GitOps       | argocd                   | Reconciles this repo into the cluster                 |
@@ -33,8 +33,8 @@ except ArgoCD (in `argocd`) and the Vault Secrets Operator (in
                 Vault: secret/grim-k8s
 ```
 
-`grim-app` and `sub2api` consume separate app-specific Vault paths via
-`envFrom`.
+`grim-app` consumes an app-specific Vault path via `envFrom`; `sub2api`
+uses the shared `server-secret` backed by `secret/grim-k8s`.
 
 ## Secret flow
 
@@ -50,8 +50,8 @@ Resources marked **manual** must be applied before ArgoCD takes over.
 
 1. **manual** — `ingress-nginx`; install the Cloudflare Origin Cert as
    per-ingress TLS Secrets (see [cloudflare-proxy.md](cloudflare-proxy.md))
-2. **manual** — pre-create `server-secret`, `grim-app-secret`, and
-   `sub2api-secret` (placeholder values)
+2. **manual** — pre-create `server-secret` and `grim-app-secret`
+   (placeholder values)
 3. **manual** — `kubectl apply -k .` (postgres, redis, keycloak, minio, grim-app,
    plus VSO CRs in `vault-secrets-operator/`)
 4. **manual** — `kubectl kustomize --enable-helm vault | kubectl apply -f -`
@@ -71,11 +71,11 @@ ArgoCD applies resources in ascending wave order:
 | Wave | Resource                                     | Why                                                |
 |------|----------------------------------------------|----------------------------------------------------|
 | -1   | `Application/vault-secrets-operator`         | VSO must be running before any VaultStaticSecret   |
+| 0    | `VaultStaticSecret/server-secret`            | Shared Secret must exist before infra consumers    |
 | 0    | `VaultStaticSecret/grim-app-secret`          | K8s Secret must exist before consumer pods         |
-| 0    | `VaultStaticSecret/sub2api-secret`           | K8s Secret must exist before consumer pods         |
 | 10   | `Job/keycloak-bootstrap`                     | Needs Keycloak running to register clients         |
 | 10   | `Deployment/grim-app`                        | Consumes `grim-app-secret` via envFrom             |
-| 10   | `Deployment/sub2api`                         | Consumes `sub2api-secret` via envFrom              |
+| 10   | `Deployment/sub2api`                         | Consumes `server-secret` via envFrom               |
 
 Resources without a wave default to wave 0. If a Pod starts before its
 Secret exists, Kubernetes restarts the Pod automatically once the Secret
@@ -100,17 +100,21 @@ ve "vault secrets enable -path=secret kv-v2 || true"
 # --- 2. Seed the shared infrastructure secret ---
 ve "vault kv put secret/grim-k8s \
   POSTGRES_USER='<...>' POSTGRES_PASSWORD='<...>' POSTGRES_DB='<...>' \
-  KEYCLOAK_DB_PASSWORD='<...>' \
-  VAULT_DB_PASSWORD='<...>' \
-  VAULT_PG_CONNECTION_URL='postgres://<user>:<pass>@postgres.infra.svc.cluster.local:5432/vault?sslmode=disable' \
+  VAULT_PG_CONNECTION_URL='postgres://postgres:<same-postgres-password>@postgres.infra.svc.cluster.local:5432/vault?sslmode=disable' \
   KC_DB=postgres \
   KC_DB_URL='jdbc:postgresql://postgres.infra.svc.cluster.local:5432/keycloak' \
-  KC_DB_USERNAME='<...>' \
+  KC_DB_USERNAME=postgres \
   KEYCLOAK_ADMIN='<...>' KEYCLOAK_ADMIN_PASSWORD='<...>' \
   KEYCLOAK_USER_USERNAME='<...>' KEYCLOAK_USER_PASSWORD='<...>' KEYCLOAK_USER_EMAIL='<...>' \
   OIDC_CLIENT_ID=global OIDC_CLIENT_SECRET='<openssl-rand-hex-32>' \
   REDIS_PASSWORD='<...>' \
-  MINIO_ROOT_USER='<...>' MINIO_ROOT_PASSWORD='<...>'"
+  MINIO_ROOT_USER='<...>' MINIO_ROOT_PASSWORD='<...>' \
+  ADMIN_EMAIL='<...>' ADMIN_PASSWORD='<...>' AUTO_SETUP=true \
+  DATABASE_HOST=postgres.infra.svc.cluster.local DATABASE_PORT=5432 \
+  DATABASE_USER=postgres DATABASE_PASSWORD='<same-postgres-password>' DATABASE_DBNAME=sub2api DATABASE_SSLMODE=disable \
+  JWT_SECRET='<openssl-rand-hex-32>' TOTP_ENCRYPTION_KEY='<openssl-rand-hex-32>' \
+  REDIS_HOST=redis.infra.svc.cluster.local REDIS_PORT=6379 REDIS_DB=1 \
+  RUN_MODE=simple SIMPLE_MODE_CONFIRM=true"
 
 # --- 3. Seed the application-specific secret (do once; edit via Vault UI later) ---
 ve "vault kv put secret/grim-app-secret \
@@ -118,25 +122,15 @@ ve "vault kv put secret/grim-app-secret \
   S3_ACCESS_KEY_ID='<...>' S3_SECRET_ACCESS_KEY='<...>' \
   PORT=3001 ..."
 
-ve "vault kv put secret/sub2api-secret \
-  ADMIN_EMAIL='<...>' ADMIN_PASSWORD='<...>' AUTO_SETUP=true \
-  DATABASE_HOST=postgres.infra.svc.cluster.local DATABASE_PORT=5432 \
-  DATABASE_USER=sub2api DATABASE_PASSWORD='<...>' DATABASE_DBNAME=sub2api DATABASE_SSLMODE=disable \
-  JWT_SECRET='<openssl-rand-hex-32>' TOTP_ENCRYPTION_KEY='<openssl-rand-hex-32>' \
-  REDIS_HOST=redis.infra.svc.cluster.local REDIS_PORT=6379 REDIS_PASSWORD='<...>' REDIS_DB=1 \
-  RUN_MODE=simple SIMPLE_MODE_CONFIRM=true"
-
 # --- 4. Write the read policy used by VSO + Vault-UI OIDC users ---
 ve "cat > /tmp/policy.hcl <<'EOF'
 path \"secret/metadata\"                  { capabilities = [\"list\"] }
 path \"secret/metadata/grim-k8s\"          { capabilities = [\"list\", \"read\"] }
 path \"secret/metadata/grim-k8s/*\"        { capabilities = [\"list\", \"read\"] }
 path \"secret/metadata/grim-app-secret\"   { capabilities = [\"list\", \"read\"] }
-path \"secret/metadata/sub2api-secret\"    { capabilities = [\"list\", \"read\"] }
 path \"secret/data/grim-k8s\"              { capabilities = [\"read\"] }
 path \"secret/data/grim-k8s/*\"            { capabilities = [\"read\"] }
 path \"secret/data/grim-app-secret\"       { capabilities = [\"create\", \"read\", \"update\"] }
-path \"secret/data/sub2api-secret\"        { capabilities = [\"create\", \"read\", \"update\"] }
 EOF
 vault policy write grim-k8s-read /tmp/policy.hcl"
 

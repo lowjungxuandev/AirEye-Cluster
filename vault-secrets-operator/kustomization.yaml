@@ -7,4 +7,3 @@ resources:
   - vault-auth.yaml
   - server-secret.yaml
   - grim-app-secret.yaml
-  - sub2api-secret.yaml
