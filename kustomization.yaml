@@ -10,7 +10,7 @@ resources:
   - keycloak
   - minio
   - grim-app
-  - sub2api
+  - litellm
 
 labels:
   - includeSelectors: false

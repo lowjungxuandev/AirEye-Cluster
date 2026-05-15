@@ -11,8 +11,7 @@ Let's Encrypt, no ACME challenges.
   once, basically zero rotation overhead.
 - HTTP-01 ACME breaks when a host is orange-clouded: Cloudflare intercepts
   `/.well-known/acme-challenge/...`, the origin never sees it, and the
-  challenge fails. We hit the Let's Encrypt "5 duplicate certs / 168h"
-  rate limit chasing this — see [issue.md](issue.md) issue #6.
+  challenge fails.
 - Edge TLS termination at Cloudflare gives free DDoS protection, caching,
   and WAF rules. The origin only ever talks to Cloudflare IPs.
 
@@ -38,15 +37,14 @@ rejected, public CAs are not required.
 In the Cloudflare dashboard for `lowjungxuan.dpdns.org`:
 
 1. **SSL/TLS → Overview** → set to **Full (Strict)**.
-2. **DNS** → each of the 7 hosts below must be an A/AAAA record pointed
+2. **DNS** → each of the 6 hosts below must be an A/AAAA record pointed
    at the cluster's public IP with the **proxy toggle on** (orange cloud):
    - `argocd.lowjungxuan.dpdns.org`
    - `keycloak.lowjungxuan.dpdns.org`
-   - `vault.lowjungxuan.dpdns.org`
    - `minio.lowjungxuan.dpdns.org`
    - `s3.lowjungxuan.dpdns.org`
    - `api.lowjungxuan.dpdns.org`
-   - `sub2api.lowjungxuan.dpdns.org`
+   - `litellm.lowjungxuan.dpdns.org`
 3. **SSL/TLS → Edge Certificates** → confirm **Universal SSL** is Active.
    This is what visitors see.
 
@@ -56,7 +54,7 @@ Cloudflare dashboard → **SSL/TLS → Origin Server → Create Certificate**.
 
 - Key type: **ECDSA** (smaller, faster handshake) or RSA — either works.
 - Hostnames: `*.lowjungxuan.dpdns.org` and `lowjungxuan.dpdns.org`.
-  One cert covers all 7 hosts because they share the apex.
+  One cert covers all hosts because they share the apex.
 - Validity: **15 years**.
 
 Save the two PEM blobs locally — Cloudflare only shows the private key
@@ -68,8 +66,7 @@ origin.key   # the private key block
 ```
 
 These files are credentials. Do **not** commit them. Keep them in a
-password manager, sealed in Vault, or wherever you keep the cluster's
-other root secrets.
+password manager or wherever you keep the cluster's other root secrets.
 
 ## Install as Kubernetes TLS Secrets
 
@@ -80,15 +77,14 @@ fixed in YAML — create one Secret per name, in the right namespace:
 |-----------|-------------|---------|
 | `infra` | `grim-app-tls` | `grim-app` ingress (`api.…`) |
 | `infra` | `keycloak-tls` | `keycloak` ingress (`keycloak.…`) |
-| `infra` | `vault-tls` | `vault` helm-managed ingress (`vault.…`) |
 | `infra` | `minio-tls` | `minio` ingress (`minio.…`, `s3.…`) |
-| `infra` | `sub2api-tls` | `sub2api` ingress (`sub2api.…`) |
+| `infra` | `litellm-tls` | `litellm` ingress (`litellm.…`) |
 | `argocd` | `argocd-tls` | `argocd-server` ingress (`argocd.…`) |
 
-All five hold the same wildcard cert + key:
+All infra TLS Secrets hold the same wildcard cert + key:
 
 ```sh
-for name in grim-app-tls keycloak-tls vault-tls minio-tls sub2api-tls; do
+for name in grim-app-tls keycloak-tls minio-tls litellm-tls; do
   kubectl -n infra create secret tls "$name" \
     --cert=origin.crt --key=origin.key \
     --dry-run=client -o yaml | kubectl apply -f -

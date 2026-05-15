@@ -2,7 +2,7 @@
 # Local pre-sync validation. Does NOT require cluster access.
 #
 # Runs:
-#   1. kustomize render of every entrypoint (root, vault, argocd, argocd/applications)
+#   1. kustomize render of every entrypoint (root, argocd, argocd/applications)
 #   2. yamllint (if installed)
 #   3. kubeconform (if installed)
 #
@@ -20,7 +20,6 @@ hdr()  { printf "\n%s== %s ==%s\n" "$bold"  "$*" "$reset"; }
 
 KUSTOMIZE_ENTRYPOINTS=(
   "."
-  "vault"
   "argocd"
   "argocd/applications"
 )
@@ -45,8 +44,9 @@ done
 hdr "yamllint"
 if command -v yamllint >/dev/null 2>&1; then
   # Skip rendered Helm charts (vendored) and rendered output.
+  mapfile -t yaml_files < <(find . -path ./.git -prune -o \( -name '*.yaml' -o -name '*.yml' \) -type f -print)
   if yamllint -d "{extends: relaxed, rules: {line-length: disable}}" \
-       $(git ls-files '*.yaml' '*.yml'); then
+       "${yaml_files[@]}"; then
     ok "yamllint clean"
   else
     fail "yamllint reported issues"

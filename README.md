@@ -1,251 +1,153 @@
 # grim-k8s
 
 Single-cluster GitOps boilerplate for the `infra` namespace. ArgoCD reconciles
-this repo from `main`; secrets land in Kubernetes via the HashiCorp Vault
-Secrets Operator (VSO) pulling from Vault.
+this repo from `main`; runtime secrets are synced from Vault with HashiCorp
+Vault Secrets Operator.
 
-- Architecture overview → [docs/architecture.md](docs/architecture.md)
-- Vault → Secret → Pod restart flow → [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md)
-- Cloudflare proxy + Origin Cert TLS → [docs/cloudflare-proxy.md](docs/cloudflare-proxy.md)
-- Issues, diagnostics, and fixes → [docs/issue.md](docs/issue.md)
-- What changed in the last cleanup pass → [docs/refactor-summary.md](docs/refactor-summary.md)
+- Architecture overview: [docs/architecture.md](docs/architecture.md)
+- Deployment order: [docs/deployment-sequence.md](docs/deployment-sequence.md)
+- Cloudflare proxy + Origin Cert TLS: [docs/cloudflare-proxy.md](docs/cloudflare-proxy.md)
 
 ## Stack
 
-| Component       | Purpose                              | Source                                 |
-|-----------------|--------------------------------------|----------------------------------------|
-| ingress-nginx   | Cluster ingress (hostNetwork)        | Upstream baremetal manifest            |
-| postgres        | DB for keycloak + vault              | `postgres:18-alpine`                   |
-| redis           | Cache backend for ArgoCD             | `redis:8-alpine`                       |
-| keycloak        | Identity provider (OIDC)             | `quay.io/keycloak/keycloak:26.6.1`     |
-| vault           | Secrets backend (PostgreSQL storage) | Helm chart `hashicorp/vault@0.32.0`    |
-| vault-secrets-operator | Sync secrets from Vault → k8s | Helm chart `hashicorp/vault-secrets-operator@0.10.0` |
-| minio           | S3-compatible object storage         | `minio/minio` + standalone console     |
-| argocd          | GitOps controller                    | Upstream manifest `v3.4.1`             |
-| grim-app        | Application backend                  | `ghcr.io/lowjungxuandev/grim/backend`  |
-| sub2api         | AI API gateway / admin dashboard     | `ghcr.io/wei-shaw/sub2api:0.1.126`     |
+| Component | Purpose | Source |
+|-----------|---------|--------|
+| ingress-nginx | Cluster ingress, hostNetwork | Upstream baremetal manifest |
+| postgres | DB for Keycloak and LiteLLM | `postgres:18-alpine` |
+| redis | Cache backend for ArgoCD and LiteLLM | `redis:8-alpine` |
+| keycloak | Identity provider, OIDC | `quay.io/keycloak/keycloak:26.6.1` |
+| vault-secrets-operator | Sync Vault secrets into Kubernetes | Helm chart `vault-secrets-operator@1.4.0` |
+| minio | S3-compatible object storage | `minio/minio` + standalone console |
+| argocd | GitOps controller | Upstream manifest `v3.4.1` |
+| grim-app | Application backend | `ghcr.io/lowjungxuandev/grim/backend` |
+| litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
 
-## Folder structure
+## Folder Structure
 
-```
+```text
 .
-├── README.md
-├── kustomization.yaml         # ArgoCD entrypoint (path: .)
-├── namespace.yaml             # the infra namespace
-│
-├── argocd/                       # ArgoCD itself (bootstrapped manually)
-│   ├── applications/             # self-managed Application + VSO Application
-│   ├── patches/                  # config + tolerations
-│   ├── vault-secrets.yaml        # VaultConnection/VaultAuth + VSS for argocd ns
-│   └── ingress.yaml
-├── vault-secrets-operator/       # VaultConnection/VaultAuth + VSS for infra ns
-├── ingress-nginx/                # bootstrapped manually
-├── keycloak/                     # Deployment + bootstrap-job (registers OIDC clients)
-├── minio/                        # StatefulSet + console + ingress
-├── postgres/                     # StatefulSet + init-configmap
-├── redis/                        # StatefulSet + smoke-test job
-├── vault/                        # Helm chart + bootstrap/seed/oidc/auto-unseal jobs
-├── grim-app/                     # the application
-├── sub2api/                      # AI API gateway / admin dashboard
-│
-├── docs/                      # architecture, secret flow, troubleshooting
-└── scripts/                   # validate.sh, troubleshoot-secrets.sh
+├── argocd/                 # ArgoCD install, patches, ingress, and Applications
+├── docs/                   # architecture and deployment notes
+├── grim-app/               # backend Deployment, Service, Ingress
+├── ingress-nginx/          # manually bootstrapped ingress controller
+├── keycloak/               # Deployment, Service, Ingress, bootstrap Job
+├── litellm/                # LiteLLM Deployment, config, DB init, Service, Ingress
+├── minio/                  # StatefulSet, console, Services, Ingress
+├── postgres/               # StatefulSet, Service, PVC, init ConfigMap
+├── redis/                  # StatefulSet, Service, PVC, smoke test
+├── vault-secrets-operator/ # VaultConnection, VaultAuth, VaultStaticSecret resources
+├── scripts/                # local validation
+├── namespace.yaml
+└── kustomization.yaml      # ArgoCD root app entrypoint
 ```
 
-## Bootstrap order
-
-ArgoCD takes over after step 5. Steps 1–4 are one-time manual setup.
+## Bootstrap Order
 
 ```sh
-# 1. Cluster ingress must be in place first.
+# 1. Cluster ingress.
 kubectl apply -k ingress-nginx
 
-# 1b. Install the Cloudflare Origin Cert as TLS Secrets — see
-#     docs/cloudflare-proxy.md for the full flow.
+# 2. Install Cloudflare Origin Cert TLS Secrets.
+# See docs/cloudflare-proxy.md.
 
-# 2a. Pre-create secrets so postgres + vault can boot.
-#     VSO takes ownership (destination.create: true) once Vault is seeded.
-kubectl create namespace infra --dry-run=client -o yaml | kubectl apply -f -
+# 3. Ensure Vault already contains the required secret keys below.
 
-kubectl -n infra create secret generic server-secret \
-  --from-literal=POSTGRES_USER=<your-value> \
-  --from-literal=POSTGRES_PASSWORD=<your-value> \
-  --from-literal=POSTGRES_DB=<your-value> \
-  --from-literal=VAULT_PG_CONNECTION_URL='postgres://postgres:<same-postgres-password>@postgres.infra.svc.cluster.local:5432/vault?sslmode=disable' \
-  --from-literal=KC_DB=postgres \
-  --from-literal=KC_DB_URL='jdbc:postgresql://postgres.infra.svc.cluster.local:5432/keycloak' \
-  --from-literal=KC_DB_USERNAME=postgres \
-  --from-literal=KEYCLOAK_ADMIN=<your-value> \
-  --from-literal=KEYCLOAK_ADMIN_PASSWORD=<your-value> \
-  --from-literal=KEYCLOAK_USER_USERNAME=<your-value> \
-  --from-literal=KEYCLOAK_USER_PASSWORD=<your-value> \
-  --from-literal=KEYCLOAK_USER_EMAIL=<your-value> \
-  --from-literal=OIDC_CLIENT_ID=global \
-  --from-literal=OIDC_CLIENT_SECRET=<openssl-rand-hex-32> \
-  --from-literal=REDIS_PASSWORD=<your-value> \
-  --from-literal=MINIO_ROOT_USER=<your-value> \
-  --from-literal=MINIO_ROOT_PASSWORD=<your-value> \
-  --from-literal=ADMIN_EMAIL=<your-value> \
-  --from-literal=ADMIN_PASSWORD=<your-value> \
-  --from-literal=AUTO_SETUP=true \
-  --from-literal=DATABASE_HOST=postgres.infra.svc.cluster.local \
-  --from-literal=DATABASE_PORT=5432 \
-  --from-literal=DATABASE_USER=postgres \
-  --from-literal=DATABASE_PASSWORD=<same-postgres-password> \
-  --from-literal=DATABASE_DBNAME=sub2api \
-  --from-literal=DATABASE_SSLMODE=disable \
-  --from-literal=JWT_SECRET=<openssl-rand-hex-32> \
-  --from-literal=TOTP_ENCRYPTION_KEY=<openssl-rand-hex-32> \
-  --from-literal=REDIS_HOST=redis.infra.svc.cluster.local \
-  --from-literal=REDIS_PORT=6379 \
-  --from-literal=REDIS_DB=1 \
-  --from-literal=RUN_MODE=simple \
-  --from-literal=SIMPLE_MODE_CONFIRM=true \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-kubectl -n infra create secret generic grim-app-secret \
-  --from-literal=DEEPSEEK_API_KEY=<your-value> \
-  --from-literal=DEEPSEEK_BASE_URL=<your-value> \
-  --from-literal=DEEPSEEK_EXTRACT_MODEL=<your-value> \
-  --from-literal=DEEPSEEK_FINAL_MODEL=<your-value> \
-  --from-literal=DEV_FORCE_KILL_PORT=false \
-  --from-literal=FIREBASE_DATABASE_URL=<your-value> \
-  --from-literal=FIREBASE_PROJECT_ID=<your-value> \
-  --from-literal=GOOGLE_APPLICATION_CREDENTIALS=<base64-encoded-service-account-json> \
-  --from-literal=GRIM_FCM_TOPIC=<your-value> \
-  --from-literal=NVIDIA_API_KEY=<your-value> \
-  --from-literal=NVIDIA_BASE_URL=<your-value> \
-  --from-literal=NVIDIA_EXTRACT_MODEL=<your-value> \
-  --from-literal=NVIDIA_FINAL_MODEL=<your-value> \
-  --from-literal=OPENAI_API_KEY=<your-value> \
-  --from-literal=OPENAI_BASE_URL=https://api.openai.com/v1 \
-  --from-literal=OPENAI_EXTRACT_MODEL=<your-value> \
-  --from-literal=OPENAI_FINAL_MODEL=<your-value> \
-  --from-literal=OPENROUTER_API_KEY=<your-value> \
-  --from-literal=OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
-  --from-literal=OPENROUTER_EXTRACT_MODEL=<your-value> \
-  --from-literal=OPENROUTER_FINAL_MODEL=<your-value> \
-  --from-literal=PORT=3001 \
-  --from-literal=S3_ACCESS_KEY_ID=<your-value> \
-  --from-literal=S3_BUCKET_DEVELOPMENT=<your-value> \
-  --from-literal=S3_BUCKET_PRODUCTION=<your-value> \
-  --from-literal=S3_BUCKET_TESTING=<your-value> \
-  --from-literal=S3_ENDPOINT=<your-value> \
-  --from-literal=S3_PRESIGN_TTL_SECONDS=604800 \
-  --from-literal=S3_REGION=us-east-1 \
-  --from-literal=S3_SECRET_ACCESS_KEY=<your-value> \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-# 2b. Stateful infra + VSO custom resources (VaultConnection, VaultAuth,
-#     VaultStaticSecrets). The VSO operator itself is installed by an
-#     ArgoCD Application created in step 5.
+# 4. Apply workload manifests.
 kubectl apply -k .
 
-# 3. Vault (Helm chart inflated by kustomize) + bootstrap jobs.
-#    vault-bootstrap initialises and unseals vault.
-#    vault-auto-unseal CronJob keeps it unsealed every minute.
-kubectl kustomize --enable-helm vault | kubectl apply -f -
-
-# 4. Configure Vault MANUALLY (kv put, policies, auth methods).
-#    Full command list in docs/architecture.md "Vault config (manual)".
-
-# 5. ArgoCD itself.
-kubectl apply -k argocd
-
-# 6. Self-managed Application + the standalone VSO Application
-#    (sync-wave: -1 so VSO starts before the rest).
+# 5. Bootstrap ArgoCD and the self-managed Application.
+kubectl apply --server-side=true --force-conflicts -k argocd
 kubectl apply -k argocd/applications
 ```
 
-After step 5, ArgoCD reconciles every resource listed in the root
-`kustomization.yaml`.
+## Required Vault Keys
 
-## Sync waves
+The existing Vault convention is KV-v2 mount `secret`, path `grim-k8s`.
+Values below are synced into `server-secret`, `litellm-secret`, and ArgoCD
+support secrets by VSO. Do not commit real values.
 
+LiteLLM requires:
+
+```text
+LITELLM_MASTER_KEY          # must start with sk-
+LITELLM_SALT_KEY            # persistent value; do not rotate automatically
+DATABASE_URL                # postgresql://<user>:<password>@postgres.infra.svc.cluster.local:5432/litellm
+REDIS_HOST                  # redis.infra.svc.cluster.local
+REDIS_PORT                  # 6379
+REDIS_PASSWORD
+OPENAI_API_KEY
+DEEPSEEK_API_KEY
+OPENROUTER_API_KEY
+NVIDIA_NIM_API_KEY
 ```
-wave -1  Application/vault-secrets-operator  (VSO must run before VSS reconcile)
-wave 0   VaultStaticSecret/server-secret     (shared infra + Sub2API runtime Secret)
-wave 0   VaultStaticSecret/grim-app-secret   (Secret must exist before pod)
-wave 0   everything else (default)
-wave 10  Job/keycloak-bootstrap              (Keycloak must be running)
-wave 10  Deployment/grim-app                 (consumes grim-app-secret)
-wave 10  Deployment/sub2api                  (consumes server-secret)
+
+The existing platform keys for Postgres, Redis, Keycloak, MinIO, ArgoCD, and
+`grim-app-secret` are still required by their respective workloads.
+
+## Sync Waves
+
+```text
+wave -1  Application/vault-secrets-operator
+wave 0   VaultStaticSecret/server-secret, grim-app-secret, litellm-secret
+wave 0   infrastructure and services
+wave 5   Job/litellm-postgres-init
+wave 10  Job/keycloak-bootstrap
+wave 10  Deployment/grim-app
+wave 10  Deployment/litellm
 ```
 
 ## Validation
-
-Before pushing changes, render every entrypoint locally:
 
 ```sh
 bash scripts/validate.sh
 ```
 
-The script runs `kubectl kustomize --enable-helm` on each entrypoint and, if
-installed, `yamllint` and `kubeconform`.
+The script renders the root, `argocd`, and `argocd/applications`
+entrypoints, then runs `yamllint` and `kubeconform` when installed.
 
 ## Hosts
 
-| Host                                      | Service           |
-|-------------------------------------------|-------------------|
-| `argocd.lowjungxuan.dpdns.org`            | ArgoCD UI         |
-| `keycloak.lowjungxuan.dpdns.org`          | Keycloak          |
-| `vault.lowjungxuan.dpdns.org`             | Vault UI          |
-| `minio.lowjungxuan.dpdns.org`             | MinIO console     |
-| `s3.lowjungxuan.dpdns.org`                | MinIO S3 API      |
-| `api.lowjungxuan.dpdns.org`               | grim-app backend  |
-| `sub2api.lowjungxuan.dpdns.org`           | sub2api admin/API  |
+| Host | Service |
+|------|---------|
+| `argocd.lowjungxuan.dpdns.org` | ArgoCD UI |
+| `keycloak.lowjungxuan.dpdns.org` | Keycloak |
+| `minio.lowjungxuan.dpdns.org` | MinIO console |
+| `s3.lowjungxuan.dpdns.org` | MinIO S3 API |
+| `api.lowjungxuan.dpdns.org` | grim-app backend |
+| `litellm.lowjungxuan.dpdns.org` | LiteLLM UI/API |
 
-## Health checks
-
-```sh
-kubectl get pods -A
-kubectl get ingress,certificate,vaultstaticsecret,application -A
-curl -vL https://argocd.lowjungxuan.dpdns.org/
-```
-
-Or:
+## LiteLLM Verification
 
 ```sh
-bash scripts/troubleshoot-secrets.sh
+kubectl -n infra get vaultstaticsecret litellm-secret
+kubectl -n infra get secret litellm-secret
+kubectl -n infra rollout status deploy/litellm
+curl -I https://litellm.lowjungxuan.dpdns.org/ui
+curl -s https://litellm.lowjungxuan.dpdns.org/v1/models \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY"
 ```
 
-## Manual secret refresh
+The UI is available at `https://litellm.lowjungxuan.dpdns.org/ui`. The OpenAI
+compatible API is available at
+`https://litellm.lowjungxuan.dpdns.org/v1/chat/completions`.
 
-When you edit a value in the Vault UI, VSO re-reads it within 30 s and
-triggers a rolling restart of every workload listed in the
-VaultStaticSecret's `rolloutRestartTargets`. To force the chain
-immediately:
-
-```sh
-# 1. Force VSO to resync from Vault now
-kubectl -n infra annotate vaultstaticsecret server-secret \
-  vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
-kubectl -n infra annotate vaultstaticsecret grim-app-secret \
-  vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
-
-# 2. (Only if a workload isn't in rolloutRestartTargets)
-kubectl -n infra rollout restart deployment grim-app
-kubectl -n infra rollout status  deployment grim-app
-```
-
-Full flow with diagrams: [docs/secret-refresh-flow.md](docs/secret-refresh-flow.md).
+The initial model aliases in `litellm/configmap.yaml` are editable defaults.
+Update the provider model names there when you choose the exact OpenAI,
+DeepSeek, OpenRouter, and NVIDIA NIM models to expose.
 
 ## Conventions
 
-- **Namespace**: All workload resources land in `infra` (set by root `kustomization.yaml`); ArgoCD itself lives in `argocd`.
-- **Common labels**: `app.kubernetes.io/part-of: grim-k8s`, `app.kubernetes.io/managed-by: argocd` — applied at root level via kustomize `labels` (with `includeSelectors: false`).
-- **Tolerations**: Applied at root level via kustomize patches (no inline tolerations).
-- **Secrets**: Single source of truth is Vault (`secret/grim-k8s`,
-  `secret/grim-app-secret`). Real values never enter git. `secret/grim-k8s`
-  backs `server-secret`, including shared infrastructure values and Sub2API
-  runtime settings.
-- **Sub2API OIDC**: Keycloak login is configured through environment values
-  from `secret/grim-k8s` / `server-secret`. If `oidc_connect_*` rows are later
-  saved in Sub2API's admin settings table, those DB settings override the env
-  fallback.
+- All workload resources land in `infra`; ArgoCD itself lives in `argocd`.
+- Real secret values never enter git.
+- LiteLLM model aliases live in `litellm/configmap.yaml`; provider keys come
+  only from Vault/VSO.
+- Root kustomize adds the common `app.kubernetes.io/part-of` and
+  `app.kubernetes.io/managed-by` labels.
+- Root kustomize adds control-plane tolerations for workloads.
 
-## Upstream notes
+## Upstream Notes
 
-- **MinIO open-source archived 2026-04-25.** Docker images stopped publishing after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release. Plan a migration (Chainguard image, build from source, or alternative S3-compatible backend) before relying on it long-term.
-- **ingress-nginx** plans to archive after Kubecon 2026; consider Gateway API / `ingate` migration in the future.
-- **ArgoCD v3.4** introduced an MS Teams Workflows breaking change — not applicable here (no Teams notifications configured).
+- MinIO open-source archived 2026-04-25. Docker images stopped publishing
+  after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release.
+- ingress-nginx plans to archive after KubeCon 2026; consider Gateway API
+  migration in the future.

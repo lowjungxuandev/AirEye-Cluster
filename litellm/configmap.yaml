@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+data:
+  config.yaml: |
+    model_list:
+      - model_name: fast-chat
+        litellm_params:
+          model: openai/gpt-4.1-mini
+          api_key: os.environ/OPENAI_API_KEY
+      - model_name: coding
+        litellm_params:
+          model: deepseek/deepseek-chat
+          api_key: os.environ/DEEPSEEK_API_KEY
+      - model_name: reasoning
+        litellm_params:
+          model: openrouter/openai/gpt-4.1
+          api_key: os.environ/OPENROUTER_API_KEY
+      - model_name: openrouter-default
+        litellm_params:
+          model: openrouter/openai/gpt-4.1-mini
+          api_key: os.environ/OPENROUTER_API_KEY
+      - model_name: nvidia-nim-default
+        litellm_params:
+          model: nvidia_nim/meta/llama-3.1-70b-instruct
+          api_key: os.environ/NVIDIA_NIM_API_KEY
+
+    general_settings:
+      store_model_in_db: true
+
+    litellm_settings:
+      cache: true
+      cache_params:
+        type: redis
+        host: os.environ/REDIS_HOST
+        port: os.environ/REDIS_PORT
+        password: os.environ/REDIS_PASSWORD
