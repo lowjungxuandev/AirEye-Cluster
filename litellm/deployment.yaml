@@ -43,13 +43,15 @@ spec:
           readinessProbe:
             tcpSocket:
               port: http
-            initialDelaySeconds: 15
+            initialDelaySeconds: 60
             periodSeconds: 10
+            failureThreshold: 12
           livenessProbe:
             tcpSocket:
               port: http
-            initialDelaySeconds: 45
+            initialDelaySeconds: 180
             periodSeconds: 20
+            failureThreshold: 6
           resources:
             requests:
               cpu: 100m
