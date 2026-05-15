@@ -47,7 +47,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: server-secret
-                  key: MINIO_OIDC_CLIENT_SECRET
+                  key: OIDC_CLIENT_SECRET
             - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
               value: Keycloak
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME

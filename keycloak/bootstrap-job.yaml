@@ -133,15 +133,19 @@ spec:
                 '["https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback","http://localhost:8250/oidc/callback"]' \
                 '["https://vault.lowjungxuan.dpdns.org"]'
 
-              upsert_client "$ARGOCD_OIDC_CLIENT_ID" "$ARGOCD_OIDC_CLIENT_SECRET" \
+              upsert_client "$ARGOCD_OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" \
                 '["https://argocd.lowjungxuan.dpdns.org/auth/callback","https://argocd.lowjungxuan.dpdns.org/*"]' \
                 '["https://argocd.lowjungxuan.dpdns.org"]'
 
-              MINIO_UUID=$(upsert_client "$MINIO_OIDC_CLIENT_ID" "$MINIO_OIDC_CLIENT_SECRET" \
+              MINIO_UUID=$(upsert_client "$MINIO_OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" \
                 '["https://minio.lowjungxuan.dpdns.org/oauth_callback","https://minio.lowjungxuan.dpdns.org/*","https://s3.lowjungxuan.dpdns.org/oauth_callback","https://s3.lowjungxuan.dpdns.org/*"]' \
                 '["https://minio.lowjungxuan.dpdns.org","https://s3.lowjungxuan.dpdns.org"]')
 
               upsert_minio_policy_mapper "$MINIO_UUID"
+
+              upsert_client sub2api "$OIDC_CLIENT_SECRET" \
+                '["https://sub2api.lowjungxuan.dpdns.org/api/v1/auth/oauth/oidc/callback"]' \
+                '["https://sub2api.lowjungxuan.dpdns.org"]'
 
               # Drop the temporary bootstrap admin so the Keycloak banner
               # clears. Re-auth as the permanent admin first (the temp

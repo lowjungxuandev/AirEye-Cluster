@@ -30,7 +30,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: server-secret
-                  key: MINIO_OIDC_CLIENT_SECRET
+                  key: OIDC_CLIENT_SECRET
             - name: CONSOLE_IDP_CALLBACK
               value: https://minio.lowjungxuan.dpdns.org
             - name: CONSOLE_IDP_DISPLAY_NAME

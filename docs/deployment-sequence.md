@@ -33,11 +33,12 @@ TLS Secrets (`grim-app-tls`, `keycloak-tls`, `vault-tls`, `minio-tls` in
 
 ### 2. Pre-create bootstrap Secrets
 
-Two Secrets are read by Jobs before Vault can write them:
+Three Secrets are read by workloads or Jobs before Vault can write them:
 
 ```sh
 kubectl -n infra create secret generic server-secret    --from-env-file=grim-k8s.env
 kubectl -n infra create secret generic grim-app-secret  --from-env-file=grim-app-secret.env
+kubectl -n infra create secret generic sub2api-secret   --from-env-file=sub2api-secret.env
 ```
 
 VSO takes ownership later because every `VaultStaticSecret` sets
@@ -91,6 +92,8 @@ kubectl -n infra wait --for=condition=complete job/vault-auth-config   --timeout
 VSO can only sync what exists in Vault. Run the `vault kv put` commands
 in [architecture.md § Vault config (manual)](architecture.md#vault-config-manual)
 to populate `secret/grim-k8s` and `secret/grim-app-secret`.
+Also populate `secret/sub2api-secret`; it carries Sub2API runtime settings.
+All Keycloak OIDC clients share `OIDC_CLIENT_SECRET` from `secret/grim-k8s`.
 
 This step is deliberately not in YAML — see the GitOps note in
 [secret-refresh-flow.md § Out of scope for kustomize](secret-refresh-flow.md#out-of-scope-for-kustomize).
@@ -130,6 +133,8 @@ kubectl -n infra annotate vaultstaticsecret server-secret \
   vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
 kubectl -n infra annotate vaultstaticsecret grim-app-secret \
   vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
+kubectl -n infra annotate vaultstaticsecret sub2api-secret \
+  vso.hashicorp.com/force-sync="$(date +%s)" --overwrite
 ```
 
 VSO will then rollout-restart every workload listed in each
@@ -148,9 +153,11 @@ explicit wave default to `0`.
 | `0` | `VaultAuth/vault-auth` | `vault-secrets-operator/vault-auth.yaml` | Default wave — same reason |
 | `0` | `VaultStaticSecret/server-secret` | `vault-secrets-operator/server-secret.yaml` | Default wave — writes the shared infra Secret |
 | `0` | `VaultStaticSecret/grim-app-secret` | `vault-secrets-operator/grim-app-secret.yaml` | Default wave — writes the app Secret |
+| `0` | `VaultStaticSecret/sub2api-secret` | `vault-secrets-operator/sub2api-secret.yaml` | Default wave — writes the Sub2API runtime Secret |
 | `0` | `Deployment`s + `StatefulSet`s (postgres, redis, keycloak, minio) | their respective dirs | Default wave — start once their Secrets exist; K8s retries Pod startup if Secret is briefly missing |
 | `10` | `Job/keycloak-bootstrap` | `keycloak/bootstrap-job.yaml` | Needs Keycloak running before it can register OIDC clients (issues #8, #9) |
 | `10` | `Deployment/grim-app` | `grim-app/deployment.yaml` | Starts after the secrets and Keycloak clients are in place |
+| `10` | `Deployment/sub2api` | `sub2api/deployment.yaml` | Starts after its Secret exists and the Keycloak OIDC client has been bootstrapped |
 
 ### Re-runnable Jobs
 
