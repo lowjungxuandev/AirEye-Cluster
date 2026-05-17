@@ -28,6 +28,7 @@ data:
 
     general_settings:
       store_model_in_db: true
+      auto_redirect_ui_login_to_sso: false
 
     litellm_settings:
       cache: true

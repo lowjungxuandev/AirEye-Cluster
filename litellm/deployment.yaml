@@ -18,7 +18,7 @@ spec:
   template:
     metadata:
       annotations:
-        litellm.lowjungxuan.dpdns.org/sso-config-revision: "2"
+        litellm.lowjungxuan.dpdns.org/sso-config-revision: "3"
       labels:
         app: litellm
     spec:
