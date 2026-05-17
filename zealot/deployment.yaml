@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: zealot
-          image: ghcr.io/tryzealot/zealot:6.2.1
+          image: tryzealot/zealot:6.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
