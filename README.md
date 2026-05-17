@@ -21,7 +21,7 @@ Vault Secrets Operator.
 | argocd | GitOps controller | Upstream manifest `v3.4.1` |
 | grim-app | Application backend | `ghcr.io/lowjungxuandev/grim/backend` |
 | litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
-| zealot | Mobile app (APK/IPA) distribution platform | `tryzealot/zealot:nightly` |
+| zealot | Mobile app (APK/IPA) distribution platform | `ghcr.io/tryzealot/zealot:nightly-2026-05-14` |
 
 ## Folder Structure
 

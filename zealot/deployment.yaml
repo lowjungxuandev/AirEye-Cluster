@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: zealot
-          image: tryzealot/zealot:nightly
-          imagePullPolicy: Always
+          image: ghcr.io/tryzealot/zealot:nightly-2026-05-14
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 80
@@ -35,13 +35,15 @@ spec:
             - name: backup
               mountPath: /app/public/backup
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /
               port: http
             initialDelaySeconds: 60
             periodSeconds: 10
             failureThreshold: 12
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /
               port: http
             initialDelaySeconds: 180
             periodSeconds: 20
