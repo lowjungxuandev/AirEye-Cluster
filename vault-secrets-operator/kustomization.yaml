@@ -8,3 +8,4 @@ resources:
   - server-secret.yaml
   - grim-app-secret.yaml
   - litellm-secret.yaml
+  - zealot-secret.yaml

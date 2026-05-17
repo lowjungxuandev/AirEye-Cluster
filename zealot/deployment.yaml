@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zealot
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  revisionHistoryLimit: 1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zealot
+  template:
+    metadata:
+      labels:
+        app: zealot
+    spec:
+      containers:
+        - name: zealot
+          image: ghcr.io/tryzealot/zealot:6.2.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          envFrom:
+            - secretRef:
+                name: zealot-secret
+            - configMapRef:
+                name: zealot-config
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/public/uploads
+            - name: backup
+              mountPath: /app/public/backup
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: zealot-uploads
+        - name: backup
+          persistentVolumeClaim:
+            claimName: zealot-backup
