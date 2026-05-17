@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: zealot
-          image: tryzealot/zealot:6.2.0
+          image: tryzealot/zealot:nightly-2026-05-14
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
