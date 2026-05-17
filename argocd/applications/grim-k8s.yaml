@@ -35,3 +35,8 @@ spec:
       jqPathExpressions:
         - .metadata.annotations."app.kubernetes.io/managed-by"
         - .metadata.labels."app.kubernetes.io/managed-by"
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
+        - /spec/storageClassName
