@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: zealot
-          image: ghcr.io/tryzealot/zealot:nightly-2026-05-14
+          image: ghcr.io/tryzealot/zealot:nightly-2026-05-14@sha256:764ae2cfc520036adb827116bd6506e198ae53ab3d1e29e19deb2213d29a22bb
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
