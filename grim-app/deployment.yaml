@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/lowjungxuandev/grim/backend:latest
-          imagePullPolicy: Always
+          image: ghcr.io/lowjungxuandev/grim/backend:0.2.4
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 3001
