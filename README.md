@@ -21,6 +21,7 @@ Vault Secrets Operator.
 | argocd | GitOps controller | Upstream manifest `v3.4.1` |
 | grim-app | Application backend | `ghcr.io/lowjungxuandev/grim/backend` |
 | litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
+| zealot | Mobile app (APK/IPA) distribution platform | `tryzealot/zealot:nightly` |
 
 ## Folder Structure
 
@@ -36,6 +37,7 @@ Vault Secrets Operator.
 ├── postgres/               # StatefulSet, Service, PVC, init ConfigMap
 ├── redis/                  # StatefulSet, Service, PVC, smoke test
 ├── vault-secrets-operator/ # VaultConnection, VaultAuth, VaultStaticSecret resources
+├── zealot/                 # Zealot Deployment, ConfigMap, PVCs, DB init, Service, Ingress
 ├── scripts/                # local validation
 ├── namespace.yaml
 └── kustomization.yaml      # ArgoCD root app entrypoint
@@ -81,6 +83,17 @@ OPENROUTER_API_KEY
 NVIDIA_NIM_API_KEY
 ```
 
+Zealot requires:
+
+```text
+ZEALOT_ADMIN_EMAIL          # bootstrap admin user email
+ZEALOT_ADMIN_PASSWORD       # bootstrap admin user password
+ZEALOT_SECRET_TOKEN         # Rails secret_key_base; generate once via `openssl rand -hex 64`, never rotate
+```
+
+Zealot reuses `POSTGRES_USER`, `POSTGRES_PASSWORD`, `OIDC_CLIENT_ID`, and
+`OIDC_CLIENT_SECRET` from the existing platform keys.
+
 LiteLLM SSO reuses the existing global Keycloak client values from
 `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET`. VSO maps them into LiteLLM's
 `GENERIC_CLIENT_ID` and `GENERIC_CLIENT_SECRET` keys and adds the Keycloak OIDC
@@ -93,12 +106,13 @@ The existing platform keys for Postgres, Redis, Keycloak, MinIO, ArgoCD, and
 
 ```text
 wave -1  Application/vault-secrets-operator
-wave 0   VaultStaticSecret/server-secret, grim-app-secret, litellm-secret
+wave 0   VaultStaticSecret/server-secret, grim-app-secret, litellm-secret, zealot-secret
 wave 0   infrastructure and services
-wave 5   Job/litellm-postgres-init
+wave 5   Job/litellm-postgres-init, Job/zealot-postgres-init
 wave 10  Job/keycloak-bootstrap
 wave 10  Deployment/grim-app
 wave 10  Deployment/litellm
+wave 10  Deployment/zealot + PVCs (zealot-uploads, zealot-backup)
 ```
 
 ## Validation
@@ -120,6 +134,7 @@ entrypoints, then runs `yamllint` and `kubeconform` when installed.
 | `s3.lowjungxuan.dpdns.org` | MinIO S3 API |
 | `api.lowjungxuan.dpdns.org` | grim-app backend |
 | `litellm.lowjungxuan.dpdns.org` | LiteLLM UI/API |
+| `zealot.lowjungxuan.dpdns.org` | Zealot mobile app distribution |
 
 ## LiteLLM Verification
 
