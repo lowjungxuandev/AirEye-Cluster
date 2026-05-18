@@ -47,18 +47,28 @@ Vault Secrets Operator.
 # 1. Cluster ingress.
 kubectl apply -k ingress-nginx
 
-# 2. Install Cloudflare Origin Cert TLS Secrets.
+# 2. Install Cloudflare Origin Cert TLS Secrets (incl. vault-tls).
 # See docs/cloudflare-proxy.md.
 
-# 3. Ensure Vault already contains the required secret keys below.
+# 3. Pre-create the bootstrap secret with the Vault Postgres URL.
+# ArgoCD's vault app cannot start without this key, since the
+# Vault StatefulSet reads VAULT_PG_CONNECTION_URL from server-secret.
+kubectl create namespace infra
+kubectl create secret generic -n infra server-secret \
+  --from-literal=VAULT_PG_CONNECTION_URL='postgresql://...'
 
-# 4. Apply workload manifests.
-kubectl apply -k .
-
-# 5. Bootstrap ArgoCD and the self-managed Application.
+# 4. Bootstrap ArgoCD and the self-managed Applications.
+# ArgoCD will then deploy in sync-wave order:
+#   wave -2  Application/vault          (Helm chart + bootstrap/auth-config Jobs + auto-unseal CronJob)
+#   wave -1  Application/vault-secrets-operator
+#   wave 0+  Application/grim-k8s       (everything else)
 kubectl apply --server-side=true --force-conflicts -k argocd
 kubectl apply -k argocd/applications
 ```
+
+`vault-bootstrap-secret` (Vault unseal key + root token) is created by the
+`vault-bootstrap` Job on first sync and stays out of Git. The
+`vault-auto-unseal` CronJob re-unseals Vault after pod restarts.
 
 ## Required Vault Keys
 
@@ -92,14 +102,21 @@ The existing platform keys for Postgres, Redis, Keycloak, MinIO, ArgoCD, and
 ## Sync Waves
 
 ```text
+wave -2  Application/vault                (Helm + local bootstrap/auth/unseal)
 wave -1  Application/vault-secrets-operator
-wave 0   VaultStaticSecret/server-secret, grim-app-secret, litellm-secret
-wave 0   infrastructure and services
-wave 5   Job/litellm-postgres-init
-wave 10  Job/keycloak-bootstrap
+wave  0  VaultStaticSecret/server-secret, grim-app-secret, litellm-secret
+wave  0  infrastructure and services
+wave  5  Hook(Sync)/litellm-postgres-init
 wave 10  Deployment/grim-app
 wave 10  Deployment/litellm
+PostSync Hook/keycloak-bootstrap, Hook/redis-smoke-test,
+         Hook/vault-bootstrap (wave 0), Hook/vault-auth-config (wave 1)
 ```
+
+Bootstrap-style Jobs now run as ArgoCD Hooks (`PostSync` or `Sync`) with
+`hook-delete-policy: BeforeHookCreation` instead of tracked resources with
+`Replace=true`. This eliminates the OutOfSync churn that previously fired
+on every reconcile.
 
 ## Validation
 
@@ -160,3 +177,13 @@ DeepSeek, OpenRouter, and NVIDIA NIM models to expose.
   after `RELEASE.2025-09-07T16-13-09Z`; this repo pins that release.
 - ingress-nginx plans to archive after KubeCon 2026; consider Gateway API
   migration in the future.
+
+## Operations Notes
+
+- **Keycloak `master` realm Access Token Lifespan**: set to at least 5
+  minutes. Sub-minute lifespans cause `argocd-server` to log
+  `oidc: token is expired` ~10×/second from browser Watch streams. Sync
+  itself is unaffected (the controller uses a Kubernetes SA token, not OIDC).
+- **`grim-app` uses `:latest`** with `imagePullPolicy: Always`. Pods do not
+  auto-restart on a new push; do `kubectl -n infra rollout restart deploy/grim-app`
+  to pick up a new image digest.

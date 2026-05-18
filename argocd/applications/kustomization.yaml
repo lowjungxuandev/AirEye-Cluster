@@ -3,5 +3,6 @@ kind: Kustomization
 namespace: argocd
 
 resources:
+  - vault.yaml
   - vault-secrets-operator.yaml
   - grim-k8s.yaml

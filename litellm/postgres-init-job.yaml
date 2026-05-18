@@ -3,8 +3,9 @@ kind: Job
 metadata:
   name: litellm-postgres-init
   annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "5"
-    argocd.argoproj.io/sync-options: Force=true,Replace=true
 spec:
   backoffLimit: 6
   template:

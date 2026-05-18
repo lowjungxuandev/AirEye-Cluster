@@ -3,8 +3,8 @@ kind: Job
 metadata:
   name: keycloak-bootstrap
   annotations:
-    argocd.argoproj.io/sync-wave: "10"
-    argocd.argoproj.io/sync-options: Force=true,Replace=true
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 6
   template:

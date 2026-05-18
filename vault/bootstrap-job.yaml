@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: vault-bootstrap
+      containers:
+        - name: bootstrap
+          image: alpine/k8s:1.36.0
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              until kubectl exec -n infra vault-0 -- vault status >/tmp/status 2>&1; do
+                if grep -q "Initialized" /tmp/status; then
+                  break
+                fi
+                sleep 5
+              done
+
+              if grep -q "Initialized.*false" /tmp/status; then
+                kubectl exec -n infra vault-0 -- vault operator init -key-shares=1 -key-threshold=1 > /tmp/init
+                UNSEAL_KEY=$(awk -F': ' '/Unseal Key 1/ {print $2}' /tmp/init)
+                ROOT_TOKEN=$(awk -F': ' '/Initial Root Token/ {print $2}' /tmp/init)
+                kubectl create secret generic -n infra vault-bootstrap-secret \
+                  --from-literal=VAULT_UNSEAL_KEY="$UNSEAL_KEY" \
+                  --from-literal=VAULT_ROOT_TOKEN="$ROOT_TOKEN" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              fi
+
+              kubectl exec -n infra vault-0 -- vault status >/tmp/status 2>&1 || true
+              if grep -q "Sealed.*true" /tmp/status; then
+                UNSEAL_KEY=$(kubectl get secret -n infra vault-bootstrap-secret -o jsonpath='{.data.VAULT_UNSEAL_KEY}' | base64 -d)
+                kubectl exec -n infra vault-0 -- vault operator unseal "$UNSEAL_KEY"
+              fi
