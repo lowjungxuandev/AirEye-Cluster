@@ -129,6 +129,11 @@ spec:
                 --uusername "$KEYCLOAK_USER_USERNAME" \
                 --rolename admin >/dev/null 2>&1 || true
 
+              # Bump access-token lifespan from the 60s default to 15m so
+              # idle browser tabs in Argo CD / MinIO / LiteLLM don't churn
+              # through token-expired errors before the next API call.
+              "$KCADM" update "realms/$REALM" -s accessTokenLifespan=900
+
               GLOBAL_UUID=$(upsert_client "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" \
                 '["https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback","http://localhost:8250/oidc/callback","https://argocd.lowjungxuan.dpdns.org/auth/callback","https://argocd.lowjungxuan.dpdns.org/*","argocd://auth/callback","http://localhost:8085/auth/callback","https://minio.lowjungxuan.dpdns.org/oauth_callback","https://minio.lowjungxuan.dpdns.org/*","https://s3.lowjungxuan.dpdns.org/oauth_callback","https://s3.lowjungxuan.dpdns.org/*","https://litellm.lowjungxuan.dpdns.org/sso/callback","https://litellm.lowjungxuan.dpdns.org/sso/debug/callback"]' \
                 '["https://vault.lowjungxuan.dpdns.org","https://argocd.lowjungxuan.dpdns.org","https://minio.lowjungxuan.dpdns.org","https://s3.lowjungxuan.dpdns.org","https://litellm.lowjungxuan.dpdns.org"]')
