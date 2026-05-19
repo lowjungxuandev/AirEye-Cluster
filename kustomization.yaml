@@ -11,6 +11,7 @@ resources:
   - minio
   - grim-app
   - litellm
+  - resume
 
 labels:
   - includeSelectors: false
