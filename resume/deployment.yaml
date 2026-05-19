@@ -52,7 +52,7 @@ spec:
             - name: OAUTH_DISCOVERY_URL
               value: https://keycloak.lowjungxuan.dpdns.org/realms/master/.well-known/openid-configuration
             - name: FLAG_DISABLE_SIGNUPS
-              value: "true"
+              value: "false"
             - name: FLAG_DISABLE_EMAIL_AUTH
               value: "true"
           readinessProbe:
