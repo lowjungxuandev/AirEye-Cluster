@@ -35,13 +35,12 @@ spec:
                 secretKeyRef:
                   name: resume-secret
                   key: S3_SECRET_ACCESS_KEY
-            - name: MC_HOST_local
-              value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio.infra.svc.cluster.local:9000
           command:
             - /bin/sh
             - -ec
           args:
             - |
+              mc alias set local http://minio.infra.svc.cluster.local:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
               mc mb --ignore-existing local/resume
 
               # `mc admin user add` is upsert — creates or replaces the
