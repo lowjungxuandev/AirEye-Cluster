@@ -15,8 +15,6 @@ spec:
         - name: init
           image: minio/mc:latest
           env:
-            - name: MC_HOST_local
-              value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio.infra.svc.cluster.local:9000
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
@@ -37,6 +35,8 @@ spec:
                 secretKeyRef:
                   name: resume-secret
                   key: S3_SECRET_ACCESS_KEY
+            - name: MC_HOST_local
+              value: http://$(MINIO_ROOT_USER):$(MINIO_ROOT_PASSWORD)@minio.infra.svc.cluster.local:9000
           command:
             - /bin/sh
             - -ec
