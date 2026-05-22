@@ -127,6 +127,13 @@ bash scripts/validate.sh
 The script renders the root, `argocd`, and `argocd/applications`
 entrypoints, then runs `yamllint` and `kubeconform` when installed.
 
+Before or after a cluster sync, check ArgoCD, Vault Secrets Operator, and hook
+Job health:
+
+```sh
+bash scripts/check-cluster-sync.sh
+```
+
 ## Hosts
 
 | Host | Service |
