@@ -24,40 +24,56 @@ spec:
               KCADM=/opt/keycloak/bin/kcadm.sh
               SERVER=http://keycloak.infra.svc.cluster.local
               REALM=master
+              BOOTSTRAP_USERNAME=${KEYCLOAK_BOOTSTRAP_USERNAME:-keycloak-gitops}
+              BOOTSTRAP_PASSWORD=${KEYCLOAK_BOOTSTRAP_PASSWORD:-$KEYCLOAK_ADMIN_PASSWORD}
 
-              # First run: temp bootstrap admin (KEYCLOAK_ADMIN) exists.
-              # Subsequent runs: it's been deleted; fall back to the
-              # permanent admin (KEYCLOAK_USER_USERNAME).
-              if ! "$KCADM" config credentials \
-                  --server "$SERVER" --realm "$REALM" \
-                  --user "$KEYCLOAK_ADMIN" \
-                  --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null 2>&1; then
+              login() {
                 "$KCADM" config credentials \
                   --server "$SERVER" --realm "$REALM" \
-                  --user "$KEYCLOAK_USER_USERNAME" \
-                  --password "$KEYCLOAK_USER_PASSWORD"
-              fi
+                  --user "$1" \
+                  --password "$2" >/dev/null 2>&1
+              }
+
+              login "$BOOTSTRAP_USERNAME" "$BOOTSTRAP_PASSWORD" \
+                || login "$KEYCLOAK_ADMIN" "$KEYCLOAK_ADMIN_PASSWORD" \
+                || login "$KEYCLOAK_USER_USERNAME" "$KEYCLOAK_USER_PASSWORD"
 
               upsert_user() {
-                USER_ID=$("$KCADM" get users -r "$REALM" -q username="$KEYCLOAK_USER_USERNAME" --fields id --format csv --noquotes | head -n 1)
-                if [ -z "$USER_ID" ]; then
-                  USER_ID=$("$KCADM" get users -r "$REALM" -q email="$KEYCLOAK_USER_EMAIL" --fields id --format csv --noquotes | head -n 1)
+                USERNAME=$1
+                PASSWORD=$2
+                EMAIL=${3:-}
+
+                USER_ID=$("$KCADM" get users -r "$REALM" -q username="$USERNAME" --fields id --format csv --noquotes | head -n 1)
+                if [ -z "$USER_ID" ] && [ -n "$EMAIL" ]; then
+                  USER_ID=$("$KCADM" get users -r "$REALM" -q email="$EMAIL" --fields id --format csv --noquotes | head -n 1)
                 fi
                 if [ -z "$USER_ID" ]; then
                   "$KCADM" create users -r "$REALM" \
-                    -s username="$KEYCLOAK_USER_USERNAME" \
-                    -s enabled=true \
-                    -s email="$KEYCLOAK_USER_EMAIL" \
-                    -s emailVerified=true
-                  USER_ID=$("$KCADM" get users -r "$REALM" -q username="$KEYCLOAK_USER_USERNAME" --fields id --format csv --noquotes | head -n 1)
+                    -s username="$USERNAME" \
+                    -s enabled=true
+                  USER_ID=$("$KCADM" get users -r "$REALM" -q username="$USERNAME" --fields id --format csv --noquotes | head -n 1)
+                  if [ -n "$EMAIL" ]; then
+                    "$KCADM" update "users/$USER_ID" -r "$REALM" \
+                      -s email="$EMAIL" \
+                      -s emailVerified=true
+                  fi
                 else
                   "$KCADM" update "users/$USER_ID" -r "$REALM" \
-                    -s username="$KEYCLOAK_USER_USERNAME" \
-                    -s email="$KEYCLOAK_USER_EMAIL" \
-                    -s emailVerified=true \
+                    -s username="$USERNAME" \
                     -s enabled=true
+                  if [ -n "$EMAIL" ]; then
+                    "$KCADM" update "users/$USER_ID" -r "$REALM" \
+                      -s email="$EMAIL" \
+                      -s emailVerified=true
+                  fi
                 fi
-                "$KCADM" set-password -r "$REALM" --userid "$USER_ID" --new-password "$KEYCLOAK_USER_PASSWORD"
+                "$KCADM" set-password -r "$REALM" --userid "$USER_ID" --new-password "$PASSWORD"
+              }
+
+              grant_admin() {
+                "$KCADM" add-roles -r "$REALM" \
+                  --uusername "$1" \
+                  --rolename admin >/dev/null 2>&1 || true
               }
 
               upsert_client() {
@@ -122,12 +138,11 @@ spec:
                 fi
               }
 
-              upsert_user
+              upsert_user "$BOOTSTRAP_USERNAME" "$BOOTSTRAP_PASSWORD" "${KEYCLOAK_BOOTSTRAP_EMAIL:-}"
+              grant_admin "$BOOTSTRAP_USERNAME"
 
-              # Grant master-realm admin to the bootstrap user (idempotent).
-              "$KCADM" add-roles -r "$REALM" \
-                --uusername "$KEYCLOAK_USER_USERNAME" \
-                --rolename admin >/dev/null 2>&1 || true
+              upsert_user "$KEYCLOAK_USER_USERNAME" "$KEYCLOAK_USER_PASSWORD" "$KEYCLOAK_USER_EMAIL"
+              grant_admin "$KEYCLOAK_USER_USERNAME"
 
               # Bump access-token lifespan from the 60s default to 15m so
               # idle browser tabs in Argo CD / MinIO / LiteLLM don't churn
@@ -143,17 +158,17 @@ spec:
               # Drop the temporary bootstrap admin so the Keycloak banner
               # clears. Re-auth as the permanent admin first (the temp
               # admin can't delete itself if it's the active session).
-              # Keycloak won't re-create the temp admin on next start
-              # because KEYCLOAK_USER_USERNAME still has the admin role.
-              if [ "$KEYCLOAK_USER_USERNAME" != "$KEYCLOAK_ADMIN" ]; then
+              # Future runs authenticate through BOOTSTRAP_USERNAME, so the
+              # temporary recovery admin can be removed after bootstrap.
+              if [ "$BOOTSTRAP_USERNAME" != "$KEYCLOAK_ADMIN" ]; then
                 TEMP_ADMIN_ID=$("$KCADM" get users -r "$REALM" \
                   -q username="$KEYCLOAK_ADMIN" --fields id \
                   --format csv --noquotes | head -n 1)
                 if [ -n "$TEMP_ADMIN_ID" ]; then
                   "$KCADM" config credentials \
                     --server "$SERVER" --realm "$REALM" \
-                    --user "$KEYCLOAK_USER_USERNAME" \
-                    --password "$KEYCLOAK_USER_PASSWORD"
+                    --user "$BOOTSTRAP_USERNAME" \
+                    --password "$BOOTSTRAP_PASSWORD"
                   "$KCADM" delete "users/$TEMP_ADMIN_ID" -r "$REALM" \
                     >/dev/null 2>&1 || true
                 fi
