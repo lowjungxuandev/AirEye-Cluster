@@ -64,6 +64,10 @@ spec:
                 value: https://keycloak.lowjungxuan.dpdns.org/realms/master
               - name: AUTH_KEYCLOAK_SCOPE
                 value: openid email profile
+              - name: REDIS_HOST
+                value: redis.infra.svc.cluster.local
+              - name: REDIS_PORT
+                value: "6379"
 
           postgresql:
             deploy: false
