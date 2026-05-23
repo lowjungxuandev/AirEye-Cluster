@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: grim-app
+  name: aireye-app
 spec:
   selector:
-    app: grim-app
+    app: aireye-app
   ports:
     - name: http
       port: 80

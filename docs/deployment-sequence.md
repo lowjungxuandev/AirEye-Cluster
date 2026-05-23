@@ -22,7 +22,7 @@ Secrets referenced by the ingresses.
 
 ### 2. Vault Values
 
-Ensure Vault KV-v2 path `secret/grim-k8s` contains the existing platform keys
+Ensure Vault KV-v2 path `secret/aireye-cluster` contains the existing platform keys
 and the LiteLLM keys listed in the root README. No real secret values belong in
 git.
 
@@ -33,7 +33,7 @@ kubectl apply -k .
 ```
 
 This installs the VSO custom resources, Postgres, Redis, Keycloak, MinIO,
-`grim-app`, and LiteLLM. The VSO controller is installed by the ArgoCD
+`aireye-app`, and LiteLLM. The VSO controller is installed by the ArgoCD
 Application in step 5.
 
 ### 4. ArgoCD
@@ -44,7 +44,7 @@ kubectl apply -k argocd/applications
 ```
 
 The first command installs ArgoCD itself. The second creates the self-managed
-`grim-k8s` Application and the `vault-secrets-operator` Application.
+`aireye-cluster` Application and the `vault-secrets-operator` Application.
 
 ## ArgoCD Waves
 
@@ -52,12 +52,12 @@ The first command installs ArgoCD itself. The second creates the self-managed
 |------|----------|------|-----|
 | `-1` | `Application/vault-secrets-operator` | `argocd/applications/vault-secrets-operator.yaml` | VSO before secret sync |
 | `0` | `VaultStaticSecret/server-secret` | `vault-secrets-operator/server-secret.yaml` | Shared platform Secret |
-| `0` | `VaultStaticSecret/grim-app-secret` | `vault-secrets-operator/grim-app-secret.yaml` | App Secret |
+| `0` | `VaultStaticSecret/aireye-app-secret` | `vault-secrets-operator/aireye-app-secret.yaml` | App Secret |
 | `0` | `VaultStaticSecret/litellm-secret` | `vault-secrets-operator/litellm-secret.yaml` | LiteLLM runtime Secret |
 | `0` | Infrastructure and Services | component dirs | Default wave |
 | `5` | `Job/litellm-postgres-init` | `litellm/postgres-init-job.yaml` | Creates the LiteLLM DB in existing Postgres |
 | `10` | `Job/keycloak-bootstrap` | `keycloak/bootstrap-job.yaml` | Registers OIDC clients after Keycloak is up |
-| `10` | `Deployment/grim-app` | `grim-app/deployment.yaml` | Starts after runtime Secrets are available |
+| `10` | `Deployment/aireye-app` | `aireye-app/deployment.yaml` | Starts after runtime Secrets are available |
 | `10` | `Deployment/litellm` | `litellm/deployment.yaml` | Starts after DB init and `litellm-secret` |
 
 ## Verification
@@ -77,10 +77,15 @@ button. Keycloak must allow redirect URI
 
 ## Re-runnable Jobs
 
-`keycloak-bootstrap` and `litellm-postgres-init` carry
-`argocd.argoproj.io/sync-options: Force=true,Replace=true`, so ArgoCD
-recreates them on each sync instead of failing on immutable `Job.spec.template`
-changes.
+Bootstrap Jobs (`keycloak-bootstrap`, `litellm-postgres-init`, and the
+other `*-init` / `*-bootstrap` resources) run as ArgoCD Hooks with
+`hook-delete-policy: BeforeHookCreation,HookSucceeded`. ArgoCD deletes and
+recreates the Job before each sync instead of patching immutable
+`Job.spec.template` fields (which would stay OutOfSync forever).
+
+Do **not** add `Force=true,Replace=true` to these Jobs. That pattern
+reintroduces OutOfSync churn and risks accidental PVC replacement on
+unrelated resources when combined with `--force`.
 
 LiteLLM intentionally does not use VSO rollout restarts. Its startup path runs
 Prisma migrations, so repeated secret-refresh restarts can prevent the server

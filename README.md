@@ -1,4 +1,4 @@
-# grim-k8s
+# AirEye-Cluster
 
 Single-cluster GitOps boilerplate for the `infra` namespace. ArgoCD reconciles
 this repo from `main`; runtime secrets are synced from Vault with HashiCorp
@@ -19,7 +19,7 @@ Vault Secrets Operator.
 | vault-secrets-operator | Sync Vault secrets into Kubernetes | Helm chart `vault-secrets-operator@1.4.0` |
 | minio | S3-compatible object storage | `minio/minio` + standalone console |
 | argocd | GitOps controller | Upstream manifest `v3.4.1` |
-| grim-app | Application backend | `ghcr.io/lowjungxuandev/grim/backend` |
+| aireye-app | Application backend (AirEye) | `ghcr.io/lowjungxuandev/aireye/backend` |
 | litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
 
 ## Folder Structure
@@ -28,7 +28,7 @@ Vault Secrets Operator.
 .
 ├── argocd/                 # ArgoCD install, patches, ingress, and Applications
 ├── docs/                   # architecture and deployment notes
-├── grim-app/               # backend Deployment, Service, Ingress
+├── aireye-app/               # backend Deployment, Service, Ingress
 ├── ingress-nginx/          # manually bootstrapped ingress controller
 ├── keycloak/               # Deployment, Service, Ingress, bootstrap Job
 ├── litellm/                # LiteLLM Deployment, config, DB init, Service, Ingress
@@ -61,7 +61,7 @@ kubectl create secret generic -n infra server-secret \
 # ArgoCD will then deploy in sync-wave order:
 #   wave -2  Application/vault          (Helm chart + bootstrap/auth-config Jobs + auto-unseal CronJob)
 #   wave -1  Application/vault-secrets-operator
-#   wave 0+  Application/grim-k8s       (everything else)
+#   wave 0+  Application/aireye-cluster       (everything else)
 kubectl apply --server-side=true --force-conflicts -k argocd
 kubectl apply -k argocd/applications
 ```
@@ -72,7 +72,7 @@ kubectl apply -k argocd/applications
 
 ## Required Vault Keys
 
-The existing Vault convention is KV-v2 mount `secret`, path `grim-k8s`.
+The existing Vault convention is KV-v2 mount `secret`, path `aireye-cluster`.
 Values below are synced into `server-secret`, `litellm-secret`, and ArgoCD
 support secrets by VSO. Do not commit real values.
 
@@ -97,17 +97,17 @@ LiteLLM SSO reuses the existing global Keycloak client values from
 endpoints.
 
 The existing platform keys for Postgres, Redis, Keycloak, MinIO, ArgoCD, and
-`grim-app-secret` are still required by their respective workloads.
+`aireye-app-secret` are still required by their respective workloads.
 
 ## Sync Waves
 
 ```text
 wave -2  Application/vault                (Helm + local bootstrap/auth/unseal)
 wave -1  Application/vault-secrets-operator
-wave  0  VaultStaticSecret/server-secret, grim-app-secret, litellm-secret
+wave  0  VaultStaticSecret/server-secret, aireye-app-secret, litellm-secret
 wave  0  infrastructure and services
 wave  5  Hook(Sync)/litellm-postgres-init
-wave 10  Deployment/grim-app
+wave 10  Deployment/aireye-app
 wave 10  Deployment/litellm
 PostSync Hook/keycloak-bootstrap, Hook/redis-smoke-test,
          Hook/vault-bootstrap (wave 0), Hook/vault-auth-config (wave 1)
@@ -142,7 +142,7 @@ bash scripts/check-cluster-sync.sh
 | `keycloak.lowjungxuan.dpdns.org` | Keycloak |
 | `minio.lowjungxuan.dpdns.org` | MinIO console |
 | `s3.lowjungxuan.dpdns.org` | MinIO S3 API |
-| `api.lowjungxuan.dpdns.org` | grim-app backend |
+| `api.lowjungxuan.dpdns.org` | aireye-app backend |
 | `litellm.lowjungxuan.dpdns.org` | LiteLLM UI/API |
 
 ## LiteLLM Verification
@@ -191,6 +191,6 @@ DeepSeek, OpenRouter, and NVIDIA NIM models to expose.
   minutes. Sub-minute lifespans cause `argocd-server` to log
   `oidc: token is expired` ~10×/second from browser Watch streams. Sync
   itself is unaffected (the controller uses a Kubernetes SA token, not OIDC).
-- **`grim-app` uses `:latest`** with `imagePullPolicy: Always`. Pods do not
-  auto-restart on a new push; do `kubectl -n infra rollout restart deploy/grim-app`
+- **`aireye-app` uses `:latest`** with `imagePullPolicy: Always`. Pods do not
+  auto-restart on a new push; do `kubectl -n infra rollout restart deploy/aireye-app`
   to pick up a new image digest.

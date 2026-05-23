@@ -21,8 +21,8 @@ spec:
               until redis-cli -h redis -a "$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG; do
                 sleep 5
               done
-              redis-cli -h redis -a "$REDIS_PASSWORD" --no-auth-warning set grim-k8s:redis-smoke ok
-              redis-cli -h redis -a "$REDIS_PASSWORD" --no-auth-warning get grim-k8s:redis-smoke | grep -q '^ok$'
+              redis-cli -h redis -a "$REDIS_PASSWORD" --no-auth-warning set aireye-cluster:redis-smoke ok
+              redis-cli -h redis -a "$REDIS_PASSWORD" --no-auth-warning get aireye-cluster:redis-smoke | grep -q '^ok$'
           env:
             - name: REDIS_PASSWORD
               valueFrom:

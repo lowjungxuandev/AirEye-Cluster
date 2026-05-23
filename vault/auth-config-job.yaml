@@ -36,29 +36,29 @@ spec:
 
               ve vault secrets enable -path=secret kv-v2 >/dev/null 2>&1 || true
 
-              kubectl exec -n infra vault-0 -- sh -ec "cat > /tmp/grim-k8s-read.hcl <<'EOF'
+              kubectl exec -n infra vault-0 -- sh -ec "cat > /tmp/aireye-cluster-read.hcl <<'EOF'
               path \"secret/metadata\"                { capabilities = [\"list\"] }
-              path \"secret/metadata/grim-k8s\"       { capabilities = [\"list\", \"read\"] }
-              path \"secret/metadata/grim-k8s/*\"     { capabilities = [\"list\", \"read\"] }
-              path \"secret/metadata/grim-app-secret\" { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/aireye-cluster\"       { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/aireye-cluster/*\"     { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/aireye-app-secret\" { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/langfuse-secret\" { capabilities = [\"list\", \"read\"] }
-              path \"secret/data/grim-k8s\"           { capabilities = [\"read\"] }
-              path \"secret/data/grim-k8s/*\"         { capabilities = [\"read\"] }
-              path \"secret/data/grim-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
+              path \"secret/data/aireye-cluster\"           { capabilities = [\"read\"] }
+              path \"secret/data/aireye-cluster/*\"         { capabilities = [\"read\"] }
+              path \"secret/data/aireye-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
               path \"secret/data/langfuse-secret\"    { capabilities = [\"read\"] }
               path \"secret/metadata/resume-secret\"  { capabilities = [\"list\", \"read\"] }
               path \"secret/data/resume-secret\"      { capabilities = [\"read\"] }
               path \"auth/oidc/role/keycloak\"        { capabilities = [\"read\"] }
               EOF
-              VAULT_TOKEN='$ROOT_TOKEN' vault policy write grim-k8s-read /tmp/grim-k8s-read.hcl"
+              VAULT_TOKEN='$ROOT_TOKEN' vault policy write aireye-cluster-read /tmp/aireye-cluster-read.hcl"
 
               ve vault auth enable kubernetes >/dev/null 2>&1 || true
               ve vault write auth/kubernetes/config \
                 kubernetes_host=https://kubernetes.default.svc
-              ve vault write auth/kubernetes/role/vso-grim-k8s \
+              ve vault write auth/kubernetes/role/vso-aireye-cluster \
                 bound_service_account_names=vault-secrets-operator \
                 bound_service_account_namespaces=infra,argocd \
-                policies=grim-k8s-read \
+                policies=aireye-cluster-read \
                 audience=vault \
                 ttl=1h
 
@@ -74,5 +74,5 @@ spec:
                 user_claim=preferred_username \
                 oidc_scopes=openid,email,profile \
                 allowed_redirect_uris=https://vault.lowjungxuan.dpdns.org/ui/vault/auth/oidc/oidc/callback,http://localhost:8250/oidc/callback \
-                policies=default,grim-k8s-read \
+                policies=default,aireye-cluster-read \
                 ttl=1h

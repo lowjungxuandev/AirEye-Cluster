@@ -6,4 +6,4 @@ resources:
   - vault.yaml
   - vault-secrets-operator.yaml
   - langfuse.yaml
-  - grim-k8s.yaml
+  - aireye-cluster.yaml

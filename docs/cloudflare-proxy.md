@@ -75,7 +75,7 @@ fixed in YAML — create one Secret per name, in the right namespace:
 
 | Namespace | Secret name | Used by |
 |-----------|-------------|---------|
-| `infra` | `grim-app-tls` | `grim-app` ingress (`api.…`) |
+| `infra` | `aireye-app-tls` | `aireye-app` ingress (`api.…`) |
 | `infra` | `keycloak-tls` | `keycloak` ingress (`keycloak.…`) |
 | `infra` | `minio-tls` | `minio` ingress (`minio.…`, `s3.…`) |
 | `infra` | `litellm-tls` | `litellm` ingress (`litellm.…`) |
@@ -84,7 +84,7 @@ fixed in YAML — create one Secret per name, in the right namespace:
 All infra TLS Secrets hold the same wildcard cert + key:
 
 ```sh
-for name in grim-app-tls keycloak-tls minio-tls litellm-tls; do
+for name in aireye-app-tls keycloak-tls minio-tls litellm-tls; do
   kubectl -n infra create secret tls "$name" \
     --cert=origin.crt --key=origin.key \
     --dry-run=client -o yaml | kubectl apply -f -

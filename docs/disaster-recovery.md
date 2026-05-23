@@ -2,7 +2,7 @@
 
 Runbook for rebuilding the cluster's data plane after total data loss.
 Written from the 2026-05-18 incident: a `argocd app sync --replace
---force --async` against `grim-k8s` deleted and recreated every PVC,
+--force --async` against `aireye-cluster` deleted and recreated every PVC,
 which on `local-path` storage means the underlying directory is removed
 with the PV.
 
@@ -15,12 +15,12 @@ known triggers:
 - `argocd app sync --replace --force` — `Replace=true` falls back to
   `kubectl replace` (delete-then-apply) for resources that fail
   server-side-apply, and `--force` makes it unstoppable. **Never run
-  this against `grim-k8s`.**
+  this against `aireye-cluster`.**
 - `kubectl delete pvc <name>`
 - An ArgoCD self-heal sync that decides a PVC is OutOfSync because of
   drift in an immutable field (e.g. `spec.volumeName` after binding).
   The `ignoreDifferences` + `RespectIgnoreDifferences=true` combo in
-  `argocd/applications/grim-k8s.yaml` is what neutralises this — keep
+  `argocd/applications/aireye-cluster.yaml` is what neutralises this — keep
   it.
 
 ## Blast radius
@@ -32,7 +32,7 @@ everything else with it:
 |---|---|---|
 | `postgres-data` | keycloak DB, vault DB, litellm DB | Vault KV secrets, auth method config, root token, unseal key |
 | `redis-data` | session/cache state | — |
-| `minio-data` | every bucket and object | grim-app S3 contents |
+| `minio-data` | every bucket and object | aireye-app S3 contents |
 
 There are no off-cluster backups. **If a PVC is gone, its data is
 gone.** Treat any sync that touches PVCs or the data layer as
@@ -45,7 +45,7 @@ load-bearing.
    `syncOptions` and the `ignoreDifferences` block for PVC
    `/spec/volumeName` and `/spec/storageClassName`. This removes the
    reason anyone would reach for `--replace`.
-3. Pause `automated` sync on `grim-k8s` before any deliberate
+3. Pause `automated` sync on `aireye-cluster` before any deliberate
    data-layer surgery.
 4. Stand up real backups (Velero, `pg_dump` CronJob to off-cluster
    storage, `mc mirror` to a separate MinIO/S3). This runbook assumes
@@ -59,7 +59,7 @@ completion before moving on.
 ### 1. Pause auto-sync
 
 ```sh
-kubectl -n argocd patch application grim-k8s --type merge \
+kubectl -n argocd patch application aireye-cluster --type merge \
   -p '{"spec":{"syncPolicy":{"automated":null}}}'
 ```
 
@@ -75,7 +75,7 @@ Two recovery sources almost always survive a PVC wipe:
 
 ```sh
 kubectl -n infra exec deploy/litellm  -- env > /tmp/litellm.env
-kubectl -n infra exec deploy/grim-app -- env > /tmp/grim-app.env
+kubectl -n infra exec deploy/aireye-app -- env > /tmp/aireye-app.env
 ```
 
 Useful values typically present:
@@ -85,14 +85,14 @@ Useful values typically present:
 | `POSTGRES_PASSWORD` (in `DATABASE_URL`) | litellm | Postgres root, Keycloak DB, Vault backend |
 | `LITELLM_MASTER_KEY` / `LITELLM_SALT_KEY` | litellm | LiteLLM admin key, encryption |
 | `GENERIC_CLIENT_ID` / `GENERIC_CLIENT_SECRET` | litellm | Keycloak OIDC client (also Vault, ArgoCD, MinIO) |
-| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | grim-app | MinIO root (S3 keys === root creds) |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | aireye-app | MinIO root (S3 keys === root creds) |
 
 **b. VSO-managed Secrets.** A k8s Secret managed by VSO survives even
 when Vault is unreachable, and its `_raw` data field is the verbatim
 Vault payload at last sync:
 
 ```sh
-kubectl -n infra get secret grim-app-secret \
+kubectl -n infra get secret aireye-app-secret \
   -o jsonpath='{.data._raw}' | base64 -d | jq '.data'
 ```
 
@@ -180,10 +180,10 @@ KE vault secrets enable -path=secret kv-v2
 #   REDIS_HOST=redis.infra.svc.cluster.local, REDIS_PORT=6379,
 #   OPENAI_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY, NVIDIA_NIM_API_KEY
 #   (empty string is fine for provider keys you don't have).
-KE vault kv put secret/grim-k8s POSTGRES_USER=postgres ...
+KE vault kv put secret/aireye-cluster POSTGRES_USER=postgres ...
 
 # Mirror the surviving _raw payload from §2b:
-KE vault kv put secret/grim-app-secret <key>=<value> ...
+KE vault kv put secret/aireye-app-secret <key>=<value> ...
 ```
 
 ### 7. Configure Vault auth methods
@@ -197,8 +197,8 @@ kubectl apply -n infra -f vault/auth-config-job.yaml
 This:
 
 - enables `kubernetes/` auth (so VSO can authenticate)
-- writes the `grim-k8s-read` policy
-- binds the `vso-grim-k8s` role to the VSO ServiceAccount
+- writes the `aireye-cluster-read` policy
+- binds the `vso-aireye-cluster` role to the VSO ServiceAccount
 - enables `oidc/` with Keycloak as provider
 
 The OIDC step requires Vault to reach
@@ -215,7 +215,7 @@ version. If values match, no restart fires. To be safe:
 ```sh
 kubectl -n infra rollout restart \
   statefulset/postgres statefulset/redis statefulset/minio \
-  deployment/keycloak deployment/litellm deployment/grim-app
+  deployment/keycloak deployment/litellm deployment/aireye-app
 ```
 
 Wait for all rollouts to complete, then watch VSO converge:
@@ -240,7 +240,7 @@ Verify in Keycloak: OIDC client `global`, the admin user, and the MinIO
 Only after every workload is Ready and every VaultStaticSecret is Synced:
 
 ```sh
-kubectl -n argocd patch application grim-k8s --type merge \
+kubectl -n argocd patch application aireye-cluster --type merge \
   -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
 ```
 
@@ -266,5 +266,5 @@ the Keycloak login round-trip works on each.
 |---|---|---|
 | MinIO bucket contents | No off-cluster copy | App recreates empty buckets on first use; persistent objects must be re-uploaded |
 | LiteLLM teams / users / keys | DB tables wiped | Recreate via `/team/new`, `/key/generate`, `/team/member_add` (master key only) |
-| Per-host TLS Secrets (`grim-app-tls`, `keycloak-tls`, `minio-tls`, `litellm-tls`) | Not managed by VSO, not in git | Re-create from Cloudflare Origin Cert per [cloudflare-proxy.md](cloudflare-proxy.md) |
+| Per-host TLS Secrets (`aireye-app-tls`, `keycloak-tls`, `minio-tls`, `litellm-tls`) | Not managed by VSO, not in git | Re-create from Cloudflare Origin Cert per [cloudflare-proxy.md](cloudflare-proxy.md) |
 | Vault root token / unseal key (the old ones) | New init produces new keys | Save the new ones from §5 |

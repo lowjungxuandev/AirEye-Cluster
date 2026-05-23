@@ -6,6 +6,6 @@ resources:
   - vault-connection.yaml
   - vault-auth.yaml
   - server-secret.yaml
-  - grim-app-secret.yaml
+  - aireye-app-secret.yaml
   - litellm-secret.yaml
   - resume-secret.yaml

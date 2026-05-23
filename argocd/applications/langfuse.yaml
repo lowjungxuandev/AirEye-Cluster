@@ -69,9 +69,9 @@ spec:
               - name: REDIS_PORT
                 value: "6379"
               - name: LANGFUSE_INIT_ORG_ID
-                value: grim
+                value: air_eye
               - name: LANGFUSE_INIT_ORG_NAME
-                value: GRIM
+                value: air_eye
               - name: LANGFUSE_INIT_PROJECT_ID
                 value: litellm
               - name: LANGFUSE_INIT_PROJECT_NAME
@@ -151,7 +151,7 @@ spec:
               secretKeyRef:
                 name: langfuse-secret
                 key: S3_SECRET_ACCESS_KEY
-    - repoURL: https://github.com/lowjungxuandev/GRIM-K8S
+    - repoURL: https://github.com/lowjungxuandev/AirEye-Cluster
       targetRevision: main
       path: langfuse
   destination:
@@ -165,6 +165,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:

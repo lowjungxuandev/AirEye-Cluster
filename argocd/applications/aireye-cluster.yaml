@@ -1,13 +1,13 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: grim-k8s
+  name: aireye-cluster
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    repoURL: https://github.com/lowjungxuandev/GRIM-K8S
+    repoURL: https://github.com/lowjungxuandev/AirEye-Cluster
     targetRevision: main
     path: .
   destination:

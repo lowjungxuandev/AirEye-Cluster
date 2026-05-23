@@ -13,16 +13,16 @@ syncs selected values into Kubernetes Secrets.
 | Data | postgres | Keycloak and LiteLLM database |
 | Cache | redis | ArgoCD state cache and LiteLLM cache |
 | Identity | keycloak | OIDC IdP for ArgoCD and MinIO |
-| Secrets | Vault + VSO | Sync `secret/grim-k8s` and app secrets into Kubernetes |
+| Secrets | Vault + VSO | Sync `secret/aireye-cluster` and app secrets into Kubernetes |
 | Storage | minio | S3-compatible object store + console |
 | GitOps | argocd | Reconciles this repo into the cluster |
-| App | grim-app | Backend service at `api.lowjungxuan.dpdns.org` |
+| App | aireye-app | Backend service at `api.lowjungxuan.dpdns.org` |
 | AI gateway | litellm | Central OpenAI-compatible gateway at `litellm.lowjungxuan.dpdns.org` |
 
 ## Trust Topology
 
 ```text
-Vault secret/grim-k8s
+Vault secret/aireye-cluster
   |
   | VSO
   v
@@ -35,8 +35,8 @@ Postgres/Redis/Keycloak  LiteLLM -> Postgres + Redis + AI providers
 ```
 
 `server-secret` holds shared platform values. `litellm-secret` contains only
-LiteLLM runtime keys and provider API keys transformed from `secret/grim-k8s`.
-`grim-app-secret` remains app-specific.
+LiteLLM runtime keys and provider API keys transformed from `secret/aireye-cluster`.
+`aireye-app-secret` remains app-specific.
 
 ## LiteLLM
 
@@ -60,7 +60,7 @@ existing Keycloak global client credentials.
 
 1. Apply `ingress-nginx`.
 2. Install Cloudflare Origin Cert TLS Secrets.
-3. Ensure Vault path `secret/grim-k8s` contains the required keys.
+3. Ensure Vault path `secret/aireye-cluster` contains the required keys.
 4. Apply the root kustomization.
 5. Apply `argocd`.
 6. Apply `argocd/applications`.
@@ -75,5 +75,5 @@ existing Keycloak global client credentials.
 | 0 | Infrastructure and Services | Default wave |
 | 5 | `Job/litellm-postgres-init` | Creates DB in existing Postgres |
 | 10 | `Job/keycloak-bootstrap` | Needs Keycloak running before registering clients |
-| 10 | `Deployment/grim-app` | Starts after runtime Secrets are present |
+| 10 | `Deployment/aireye-app` | Starts after runtime Secrets are present |
 | 10 | `Deployment/litellm` | Starts after DB init and `litellm-secret` |

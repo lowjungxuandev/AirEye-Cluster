@@ -56,7 +56,7 @@ spec:
                 - hosts:
                     - vault.lowjungxuan.dpdns.org
                   secretName: vault-tls
-    - repoURL: https://github.com/lowjungxuandev/GRIM-K8S
+    - repoURL: https://github.com/lowjungxuandev/AirEye-Cluster
       targetRevision: main
       path: vault
   destination:
@@ -70,6 +70,7 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:

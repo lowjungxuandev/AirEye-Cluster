@@ -14,24 +14,58 @@ hdr()  { printf "\n%s== %s ==%s\n" "$bold"  "$*" "$reset"; }
 ERRORS=0
 
 APP_NAMESPACE=${APP_NAMESPACE:-argocd}
-APP_NAME=${APP_NAME:-grim-k8s}
 WORKLOAD_NAMESPACE=${WORKLOAD_NAMESPACE:-infra}
+# Comma-separated Application names in APP_NAMESPACE (default: all managed apps).
+APP_NAMES=${APP_NAMES:-aireye-cluster,langfuse,vault,vault-secrets-operator}
 
-check_app() {
-  hdr "argocd application"
+check_applications() {
+  hdr "argocd applications"
 
-  local sync health phase message
-  sync=$(kubectl -n "$APP_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.sync.status}')
-  health=$(kubectl -n "$APP_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.health.status}')
-  phase=$(kubectl -n "$APP_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.operationState.phase}')
-  message=$(kubectl -n "$APP_NAMESPACE" get application "$APP_NAME" -o jsonpath='{.status.operationState.message}')
+  local name sync health phase message revision
+  IFS=',' read -ra names <<<"$APP_NAMES"
+  for name in "${names[@]}"; do
+    name="${name#"${name%%[![:space:]]*}"}"
+    name="${name%"${name##*[![:space:]]}"}"
+    [[ -n "$name" ]] || continue
 
-  if [[ "$sync" == "Synced" && "$health" == "Healthy" && "$phase" == "Succeeded" ]]; then
-    ok "$APP_NAME sync=$sync health=$health phase=$phase"
-  else
-    fail "$APP_NAME sync=$sync health=$health phase=$phase message=$message"
-    ERRORS=$((ERRORS+1))
+    if ! kubectl -n "$APP_NAMESPACE" get application "$name" >/dev/null 2>&1; then
+      fail "missing Application/$name in $APP_NAMESPACE"
+      ERRORS=$((ERRORS+1))
+      continue
+    fi
+
+    sync=$(kubectl -n "$APP_NAMESPACE" get application "$name" -o jsonpath='{.status.sync.status}')
+    health=$(kubectl -n "$APP_NAMESPACE" get application "$name" -o jsonpath='{.status.health.status}')
+    phase=$(kubectl -n "$APP_NAMESPACE" get application "$name" -o jsonpath='{.status.operationState.phase}')
+    message=$(kubectl -n "$APP_NAMESPACE" get application "$name" -o jsonpath='{.status.operationState.message}')
+    revision=$(kubectl -n "$APP_NAMESPACE" get application "$name" -o jsonpath='{.status.sync.revision}')
+
+    if [[ "$sync" == "Synced" && "$health" == "Healthy" ]]; then
+      ok "$name sync=$sync health=$health phase=${phase:-n/a} rev=${revision:-helm}"
+    else
+      fail "$name sync=$sync health=$health phase=${phase:-n/a} message=$message"
+      ERRORS=$((ERRORS+1))
+    fi
+  done
+}
+
+check_orphan_applications() {
+  hdr "orphan applications"
+
+  local orphans
+  orphans=$(kubectl get applications -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{"\n"}{end}' \
+    | grep -v "^${APP_NAMESPACE}/" || true)
+
+  if [[ -z "$orphans" ]]; then
+    ok "no Applications outside $APP_NAMESPACE"
+    return
   fi
+
+  while IFS= read -r orphan; do
+    [[ -n "$orphan" ]] || continue
+    fail "orphan Application/$orphan (delete or move under $APP_NAMESPACE)"
+    ERRORS=$((ERRORS+1))
+  done <<<"$orphans"
 }
 
 check_vault_static_secrets() {
@@ -83,7 +117,8 @@ check_stuck_hooks() {
   fi
 }
 
-check_app
+check_applications
+check_orphan_applications
 check_vault_static_secrets
 check_stuck_hooks
 

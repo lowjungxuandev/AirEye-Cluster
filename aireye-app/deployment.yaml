@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: grim-app
+  name: aireye-app
   annotations:
     argocd.argoproj.io/sync-wave: "10"
 spec:
@@ -9,22 +9,24 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: grim-app
+      app: aireye-app
   template:
     metadata:
       labels:
-        app: grim-app
+        app: aireye-app
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: backend
-          image: ghcr.io/lowjungxuandev/grim/backend:latest
+          image: ghcr.io/lowjungxuandev/aireye/backend:latest
           imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3001
           envFrom:
             - secretRef:
-                name: grim-app-secret
+                name: aireye-app-secret
           readinessProbe:
             tcpSocket:
               port: http

@@ -7,7 +7,7 @@ spec:
   method: kubernetes
   mount: kubernetes
   kubernetes:
-    role: vso-grim-k8s
+    role: vso-aireye-cluster
     serviceAccount: vault-secrets-operator
     audiences:
       - vault
