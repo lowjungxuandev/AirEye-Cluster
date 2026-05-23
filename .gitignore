@@ -2,3 +2,5 @@
 vault/charts/
 reloader/charts/
 .claude/
+.cursor/
+.codex/
