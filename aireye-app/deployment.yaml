@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/lowjungxuandev/grim/backend:latest
+          image: ghcr.io/lowjungxuandev/aireye/backend:latest
           imagePullPolicy: Always
           ports:
             - name: http
