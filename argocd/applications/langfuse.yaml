@@ -115,7 +115,7 @@ spec:
             deploy: true
             clusterEnabled: false
             replicaCount: 1
-            resourcesPreset: small
+            resourcesPreset: medium
             auth:
               username: default
               existingSecret: langfuse-secret

@@ -65,7 +65,7 @@ spec:
               memory: 768Mi
             limits:
               cpu: 1000m
-              memory: 2Gi
+              memory: 1.5Gi
       volumes:
         - name: config
           configMap:
