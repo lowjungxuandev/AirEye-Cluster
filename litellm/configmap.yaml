@@ -12,6 +12,7 @@ data:
 
     litellm_settings:
       cache: true
+      callbacks: ["langfuse_otel"]
       cache_params:
         type: redis
         host: os.environ/REDIS_HOST

@@ -1,0 +1,155 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: langfuse
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://langfuse.github.io/langfuse-k8s
+      chart: langfuse
+      targetRevision: 1.5.31
+      helm:
+        releaseName: langfuse
+        values: |
+          langfuse:
+            nextauth:
+              url: https://langfuse.lowjungxuan.dpdns.org
+              secret:
+                secretKeyRef:
+                  name: langfuse-secret
+                  key: NEXTAUTH_SECRET
+            salt:
+              secretKeyRef:
+                name: langfuse-secret
+                key: SALT
+            encryptionKey:
+              secretKeyRef:
+                name: langfuse-secret
+                key: ENCRYPTION_KEY
+            ingress:
+              enabled: true
+              className: nginx
+              annotations:
+                nginx.ingress.kubernetes.io/proxy-body-size: "0"
+              hosts:
+                - host: langfuse.lowjungxuan.dpdns.org
+                  paths:
+                    - path: /
+                      pathType: Prefix
+              tls:
+                enabled: true
+                secretName: langfuse-tls
+            deployment:
+              annotations:
+                argocd.argoproj.io/sync-wave: "10"
+            tolerations:
+              - key: node-role.kubernetes.io/control-plane
+                effect: NoSchedule
+            additionalEnv:
+              - name: AUTH_KEYCLOAK_CLIENT_ID
+                valueFrom:
+                  secretKeyRef:
+                    name: langfuse-keycloak-oidc
+                    key: AUTH_KEYCLOAK_CLIENT_ID
+              - name: AUTH_KEYCLOAK_CLIENT_SECRET
+                valueFrom:
+                  secretKeyRef:
+                    name: langfuse-keycloak-oidc
+                    key: AUTH_KEYCLOAK_CLIENT_SECRET
+              - name: AUTH_KEYCLOAK_ISSUER
+                value: https://keycloak.lowjungxuan.dpdns.org/realms/master
+              - name: AUTH_KEYCLOAK_SCOPE
+                value: openid email profile
+
+          postgresql:
+            deploy: false
+            host: postgres.infra.svc.cluster.local
+            port: 5432
+            auth:
+              username: postgres
+              existingSecret: server-secret
+              secretKeys:
+                userPasswordKey: POSTGRES_PASSWORD
+                adminPasswordKey: POSTGRES_PASSWORD
+              database: langfuse
+
+          redis:
+            deploy: false
+            host: redis.infra.svc.cluster.local
+            port: 6379
+            auth:
+              username: null
+              existingSecret: server-secret
+              existingSecretPasswordKey: REDIS_PASSWORD
+              database: 0
+            cluster:
+              enabled: false
+
+          clickhouse:
+            deploy: true
+            clusterEnabled: false
+            replicaCount: 1
+            resourcesPreset: small
+            auth:
+              username: default
+              existingSecret: langfuse-secret
+              existingSecretKey: CLICKHOUSE_PASSWORD
+            persistence:
+              enabled: true
+              storageClass: local-path
+              size: 20Gi
+            tolerations:
+              - key: node-role.kubernetes.io/control-plane
+                effect: NoSchedule
+            zookeeper:
+              persistence:
+                enabled: true
+                storageClass: local-path
+                size: 8Gi
+              tolerations:
+                - key: node-role.kubernetes.io/control-plane
+                  effect: NoSchedule
+
+          s3:
+            deploy: false
+            bucket: langfuse
+            region: us-east-1
+            endpoint: http://minio.infra.svc.cluster.local:9000
+            forcePathStyle: true
+            accessKeyId:
+              secretKeyRef:
+                name: langfuse-secret
+                key: S3_ACCESS_KEY_ID
+            secretAccessKey:
+              secretKeyRef:
+                name: langfuse-secret
+                key: S3_SECRET_ACCESS_KEY
+    - repoURL: https://github.com/lowjungxuandev/GRIM-K8S
+      targetRevision: main
+      path: langfuse
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data

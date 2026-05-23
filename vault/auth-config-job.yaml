@@ -41,9 +41,11 @@ spec:
               path \"secret/metadata/grim-k8s\"       { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/grim-k8s/*\"     { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/grim-app-secret\" { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/langfuse-secret\" { capabilities = [\"list\", \"read\"] }
               path \"secret/data/grim-k8s\"           { capabilities = [\"read\"] }
               path \"secret/data/grim-k8s/*\"         { capabilities = [\"read\"] }
               path \"secret/data/grim-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
+              path \"secret/data/langfuse-secret\"    { capabilities = [\"read\"] }
               path \"secret/metadata/resume-secret\"  { capabilities = [\"list\", \"read\"] }
               path \"secret/data/resume-secret\"      { capabilities = [\"read\"] }
               path \"auth/oidc/role/keycloak\"        { capabilities = [\"read\"] }
