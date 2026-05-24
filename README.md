@@ -53,7 +53,7 @@ trust diagram, and sync wave rationale.
 | vault-secrets-operator | Sync Vault secrets into Kubernetes | Helm chart `vault-secrets-operator@1.4.0` |
 | minio | S3-compatible object storage | `quay.io/minio/minio` (pinned `RELEASE.2025-09-07T16-13-09Z`) |
 | argocd | GitOps controller | Upstream manifest `v3.4.1` |
-| aireye-app | Application backend (AirEye) | `ghcr.io/lowjungxuandev/aireye/backend` |
+| aireye-app | Application backend (AirEye) | `ghcr.io/lowjungxuan98/aireye/backend` |
 | litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
 | langfuse | LLM observability and tracing | Helm chart `langfuse:1.5.31` from upstream |
 | resume | Reactive Resume (open-source resume builder) | `ghcr.io/amruthpillai/reactive-resume:latest` |
