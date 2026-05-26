@@ -151,7 +151,7 @@ spec:
               secretKeyRef:
                 name: langfuse-secret
                 key: S3_SECRET_ACCESS_KEY
-    - repoURL: https://github.com/lowjungxuandev/AirEye-Cluster
+    - repoURL: https://github.com/lowjungxuan98/AirEye-Cluster
       targetRevision: main
       path: langfuse
   destination:

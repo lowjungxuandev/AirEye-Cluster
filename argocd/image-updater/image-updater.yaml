@@ -1,0 +1,25 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: aireye-app
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  commonUpdateSettings:
+    updateStrategy: semver
+    allowTags: "regexp:^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    ignoreTags:
+      - latest
+      - dev
+      - test
+  writeBackConfig:
+    method: git:secret:argocd/argocd-image-updater-git-creds
+    gitConfig:
+      repository: https://github.com/lowjungxuan98/AirEye-Cluster.git
+      branch: main
+      writeBackTarget: kustomization:/
+  applicationRefs:
+    - namePattern: aireye-cluster
+      images:
+        - alias: aireyebackend
+          imageName: ghcr.io/lowjungxuan98/aireye/backend

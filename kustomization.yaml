@@ -13,6 +13,10 @@ resources:
   - litellm
   - resume
 
+images:
+  - name: ghcr.io/lowjungxuan98/aireye/backend
+    newTag: 0.2.12
+
 labels:
   - includeSelectors: false
     includeTemplates: true

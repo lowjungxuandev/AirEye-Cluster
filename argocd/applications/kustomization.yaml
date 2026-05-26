@@ -6,4 +6,5 @@ resources:
   - vault.yaml
   - vault-secrets-operator.yaml
   - langfuse.yaml
+  - argocd-image-updater.yaml
   - aireye-cluster.yaml

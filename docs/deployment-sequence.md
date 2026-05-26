@@ -23,7 +23,9 @@ Secrets referenced by the ingresses.
 ### 2. Vault Values
 
 Ensure Vault KV-v2 path `secret/aireye-cluster` contains the existing platform keys
-and the LiteLLM keys listed in the root README. No real secret values belong in
+and the LiteLLM keys listed in the root README. Also create
+`secret/argocd-image-updater-git-creds` before syncing Image Updater; see
+[argocd-image-updater.md](argocd-image-updater.md). No real secret values belong in
 git.
 
 ### 3. Root Manifests
@@ -51,6 +53,7 @@ The first command installs ArgoCD itself. The second creates the self-managed
 | Wave | Resource | File | Why |
 |------|----------|------|-----|
 | `-1` | `Application/vault-secrets-operator` | `argocd/applications/vault-secrets-operator.yaml` | VSO before secret sync |
+| `0` | `Application/argocd-image-updater` | `argocd/applications/argocd-image-updater.yaml` | Installs Image Updater beside ArgoCD Applications |
 | `0` | `VaultStaticSecret/server-secret` | `vault-secrets-operator/server-secret.yaml` | Shared platform Secret |
 | `0` | `VaultStaticSecret/aireye-app-secret` | `vault-secrets-operator/aireye-app-secret.yaml` | App Secret |
 | `0` | `VaultStaticSecret/litellm-secret` | `vault-secrets-operator/litellm-secret.yaml` | LiteLLM runtime Secret |

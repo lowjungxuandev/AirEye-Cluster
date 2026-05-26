@@ -1,7 +1,9 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: aireye-cluster
+  name: argocd-image-updater
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -9,10 +11,10 @@ spec:
   source:
     repoURL: https://github.com/lowjungxuan98/AirEye-Cluster
     targetRevision: main
-    path: .
+    path: argocd/image-updater
   destination:
     server: https://kubernetes.default.svc
-    namespace: infra
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
@@ -21,23 +23,9 @@ spec:
       - CreateNamespace=true
       - ServerSideApply=true
       - SkipDryRunOnMissingResource=true
-      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
         duration: 5s
         factor: 2
         maxDuration: 3m
-  ignoreDifferences:
-    - group: ""
-      kind: Secret
-      jsonPointers:
-        - /data
-      jqPathExpressions:
-        - .metadata.annotations."app.kubernetes.io/managed-by"
-        - .metadata.labels."app.kubernetes.io/managed-by"
-    - group: ""
-      kind: PersistentVolumeClaim
-      jsonPointers:
-        - /spec/volumeName
-        - /spec/storageClassName

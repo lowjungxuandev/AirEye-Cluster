@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+
+resources:
+  - https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v1.2.1/config/install.yaml
+  - vault-secret.yaml
+  - image-updater.yaml
+
+patches:
+  - path: patches/config.yaml
+    target:
+      kind: ConfigMap
+      name: argocd-image-updater-config
+  - path: patches/resources.yaml
+    target:
+      kind: Deployment
+      name: argocd-image-updater-controller
+  - path: patches/tolerations.yaml
+    target:
+      kind: Deployment
+      name: argocd-image-updater-controller

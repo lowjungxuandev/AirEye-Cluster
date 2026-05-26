@@ -54,6 +54,7 @@ trust diagram, and sync wave rationale.
 | minio | S3-compatible object storage | `quay.io/minio/minio` (pinned `RELEASE.2025-09-07T16-13-09Z`) |
 | argocd | GitOps controller | Upstream manifest `v3.4.1` |
 | aireye-app | Application backend (AirEye) | `ghcr.io/lowjungxuan98/aireye/backend` |
+| argocd-image-updater | Automatically updates pinned AirEye backend image tags in Git | `quay.io/argoprojlabs/argocd-image-updater` |
 | litellm | Centralized AI API gateway | `ghcr.io/berriai/litellm:v1.83.14-stable.patch.3` |
 | langfuse | LLM observability and tracing | Helm chart `langfuse:1.5.31` from upstream |
 | resume | Reactive Resume (open-source resume builder) | `ghcr.io/amruthpillai/reactive-resume:latest` |
@@ -98,13 +99,14 @@ project receive traces from LiteLLM callbacks automatically.
 
 ## GitOps Workflow
 
-ArgoCD reconciles this repository from `main`. Four Applications are defined
+ArgoCD reconciles this repository from `main`. Applications are defined
 under `argocd/applications/`:
 
 | Application | Sync Wave | Source |
 |-------------|-----------|--------|
 | `vault` | -2 | Helm chart (`hashicorp/vault`) + local `vault/` path |
 | `vault-secrets-operator` | -1 | Helm chart (`vault-secrets-operator`) |
+| `argocd-image-updater` | 0 | Local `argocd/image-updater/` path |
 | `langfuse` | 1 | Helm chart (`langfuse/langfuse-k8s`) + local `langfuse/` path |
 | `aireye-cluster` | 0+ | This repo root (`kustomization.yaml`) |
 
@@ -114,6 +116,7 @@ workloads in the `infra` namespace through sync waves:
 ```text
 wave -2  Application/vault                (Helm + local bootstrap/auth/unseal)
 wave -1  Application/vault-secrets-operator
+wave  0  Application/argocd-image-updater (controller + ImageUpdater CR)
 wave  1  Application/langfuse             (Helm chart + init Jobs)
 wave  0  VaultStaticSecret/server-secret, aireye-app-secret, litellm-secret
 wave  0  infrastructure and services

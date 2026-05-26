@@ -41,10 +41,12 @@ spec:
               path \"secret/metadata/aireye-cluster\"       { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/aireye-cluster/*\"     { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/aireye-app-secret\" { capabilities = [\"list\", \"read\"] }
+              path \"secret/metadata/argocd-image-updater-git-creds\" { capabilities = [\"list\", \"read\"] }
               path \"secret/metadata/langfuse-secret\" { capabilities = [\"list\", \"read\"] }
               path \"secret/data/aireye-cluster\"           { capabilities = [\"read\"] }
               path \"secret/data/aireye-cluster/*\"         { capabilities = [\"read\"] }
               path \"secret/data/aireye-app-secret\"    { capabilities = [\"create\", \"read\", \"update\"] }
+              path \"secret/data/argocd-image-updater-git-creds\" { capabilities = [\"read\"] }
               path \"secret/data/langfuse-secret\"    { capabilities = [\"read\"] }
               path \"secret/metadata/resume-secret\"  { capabilities = [\"list\", \"read\"] }
               path \"secret/data/resume-secret\"      { capabilities = [\"read\"] }

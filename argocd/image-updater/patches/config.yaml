@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-image-updater-config
+data:
+  log.level: info
+  git.user: lowjungxuan98
+  git.email: lowjungxuan@gmail.com
