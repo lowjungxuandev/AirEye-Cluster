@@ -331,6 +331,6 @@ DeepSeek, OpenRouter, and NVIDIA NIM models to expose.
   minutes. Sub-minute lifespans cause `argocd-server` to log
   `oidc: token is expired` ~10x/second from browser Watch streams. Sync
   itself is unaffected (the controller uses a Kubernetes SA token, not OIDC).
-- **`aireye-app` uses `:latest`** with `imagePullPolicy: Always`. Pods do not
-  auto-restart on a new push; do `kubectl -n infra rollout restart deploy/aireye-app`
+- **`aireye-app` uses a pinned backend image tag** with `imagePullPolicy: Always`. Pods do not
+  auto-restart on a new image push; update `aireye-app/deployment.yaml` and let ArgoCD sync it
   to pick up a new image digest.
